@@ -1,18 +1,30 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Redirect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { BackHandler, Pressable, StyleSheet, Text, View } from 'react-native';
+import { requireOptionalNativeModule } from 'expo';
+import { BackHandler, Pressable, StyleSheet, Text, TurboModuleRegistry, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { OfflineBanner } from '@/components/OfflineBanner';
 import { MoreSheet } from '@/components/panel/MoreSheet';
 import { PanelProfile } from '@/components/panel/PanelProfile';
 import { PanelTabBar, type BarItem } from '@/components/panel/PanelTabBar';
-import { PanelWebView, type PanelWebViewHandle, type ShellState } from '@/components/panel/PanelWebView';
+import type { PanelWebView as PanelWebViewComponent, PanelWebViewHandle, ShellState } from '@/components/panel/PanelWebView';
 import { splitTabs } from '@/components/panel/panelTabs';
-import { LoadingState } from '@/components/ui/States';
+import { ErrorState, LoadingState } from '@/components/ui/States';
 import { colors, fonts, TOUCH } from '@/constants/theme';
 import { panelOf, useAuth, type PanelKind } from '@/providers/AuthProvider';
 import { useToast } from '@/providers/ToastProvider';
+import { ApiError } from '@/services/api/errors';
+
+// The panel needs native code (WebView, file system, sharing) that older app
+// builds don't have. Load it only when that code is present, so an old build
+// shows a message here instead of crashing the whole app.
+const panelSupported =
+  !!TurboModuleRegistry.get('RNCWebViewModule') && !!requireOptionalNativeModule('FileSystem') && !!requireOptionalNativeModule('ExpoSharing');
+const PanelWebView: typeof PanelWebViewComponent | null = panelSupported
+  ? // eslint-disable-next-line @typescript-eslint/no-require-imports
+    (require('@/components/panel/PanelWebView') as typeof import('@/components/panel/PanelWebView')).PanelWebView
+  : null;
 
 // The super-admin and developer panels in the app. The content of every
 // section is the website's own panel (same options, same permissions, same
@@ -36,7 +48,15 @@ export default function PanelScreen() {
   if (status === 'signedOut' || !user) return <Redirect href="/welcome" />;
   const kind = panelOf(user);
   if (!kind) return <Redirect href="/" />;
-  return <Panel kind={kind} />;
+  if (!PanelWebView) {
+    return (
+      <ErrorState
+        title="Update the app"
+        error={new ApiError('validation', 'This version of the app can’t open the panel. Please install the latest version.')}
+      />
+    );
+  }
+  return <Panel kind={kind} PanelWebView={PanelWebView} />;
 }
 
 function initialsOf(s: string) {
@@ -50,7 +70,7 @@ function initialsOf(s: string) {
   );
 }
 
-function Panel({ kind }: { kind: PanelKind }) {
+function Panel({ kind, PanelWebView }: { kind: PanelKind; PanelWebView: typeof PanelWebViewComponent }) {
   const router = useRouter();
   const toast = useToast();
   const { user, sessionToken, refresh, signOut } = useAuth();

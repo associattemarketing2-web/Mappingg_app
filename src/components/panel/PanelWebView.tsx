@@ -1,4 +1,4 @@
-import * as Clipboard from 'expo-clipboard';
+import { requireOptionalNativeModule } from 'expo';
 import { File, Paths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import * as WebBrowser from 'expo-web-browser';
@@ -11,6 +11,19 @@ import { colors } from '@/constants/theme';
 import { bootHtml, bridgeScript, goToTab, type PanelMode } from '@/lib/panelBridge';
 import { useToast } from '@/providers/ToastProvider';
 import { ApiError } from '@/services/api/errors';
+
+// Older dev builds may not include the clipboard native module. Load it only
+// when it exists, otherwise fall back to the share sheet so the app doesn't crash.
+async function copyText(text: string): Promise<boolean> {
+  if (requireOptionalNativeModule('ExpoClipboard')) {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const Clipboard: typeof import('expo-clipboard') = require('expo-clipboard');
+    await Clipboard.setStringAsync(text);
+    return true;
+  }
+  await Share.share({ message: text }).catch(() => undefined);
+  return false;
+}
 
 // One of the website's panels (super-admin, developer panel, map editor,
 // projects intake) inside the app. The page is the website's own, so every
@@ -173,7 +186,9 @@ export const PanelWebView = forwardRef<PanelWebViewHandle, Props>(function Panel
           openExternal(String(msg.url || ''));
           break;
         case 'clipboard':
-          void Clipboard.setStringAsync(String(msg.text || '')).then(() => toast('Copied'));
+          void copyText(String(msg.text || '')).then((copied) => {
+            if (copied) toast('Copied');
+          });
           break;
         case 'share':
           void Share.share({ message: String(msg.text || ''), title: msg.title ? String(msg.title) : undefined }).catch(() => undefined);
