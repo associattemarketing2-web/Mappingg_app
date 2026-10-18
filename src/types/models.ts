@@ -132,6 +132,8 @@ export interface SessionUser {
   verified: boolean;
   mobile: string;
   needsMobile: boolean;
+  /** Where the website sends this account after sign-in (e.g. /dashboard/s-admin, /map). */
+  home?: string;
 }
 
 export interface EnquireResult {

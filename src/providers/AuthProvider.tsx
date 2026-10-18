@@ -23,6 +23,8 @@ interface AuthState {
   /** Re-reads the account from the server (and renews the session). */
   refresh(): Promise<SessionUser | null>;
   setUser(user: SessionUser): void;
+  /** The current session token (for the website panels shown inside the app). */
+  sessionToken(): string | null;
 }
 
 const AuthContext = createContext<AuthState | null>(null);
@@ -183,9 +185,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await dropSession(false);
   }, [dropSession]);
 
+  const sessionToken = useCallback(() => tokenRef.current, []);
+
   const value = useMemo<AuthState>(
-    () => ({ status, user, offline, sessionEnded, signIn, signUp, signOut, refresh, setUser }),
-    [status, user, offline, sessionEnded, signIn, signUp, signOut, refresh, setUser],
+    () => ({ status, user, offline, sessionEnded, signIn, signUp, signOut, refresh, setUser, sessionToken }),
+    [status, user, offline, sessionEnded, signIn, signUp, signOut, refresh, setUser, sessionToken],
   );
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
@@ -203,3 +207,17 @@ export const isDeveloper = (u: SessionUser | null) => u?.role === 'developer';
 export const isStaff = (u: SessionUser | null) => u?.role === 'admin' || u?.role === 'employee';
 /** Developers and channel partners must be approved before using the live map. */
 export const awaitingApproval = (u: SessionUser | null) => !!u && (u.role === 'developer' || u.role === 'agent') && !u.verified;
+
+export type PanelKind = 'admin' | 'developer';
+/**
+ * Accounts whose home on the website is a control panel: staff → the
+ * super-admin (/dashboard/s-admin); approved developers with editor access →
+ * the developer panel (/dashboard/developer). View-only developers, agents and
+ * buyers use the live map, exactly as on the website.
+ */
+export function panelOf(u: SessionUser | null): PanelKind | null {
+  if (!u || u.needsMobile) return null;
+  if (isStaff(u) || u.home === '/dashboard/s-admin') return 'admin';
+  if (u.role === 'developer' && u.verified && u.home !== '/map') return 'developer';
+  return null;
+}

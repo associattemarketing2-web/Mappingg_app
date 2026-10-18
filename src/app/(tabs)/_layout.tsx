@@ -25,7 +25,7 @@ export default function TabsLayout() {
       <Tabs.Screen name="index" options={{ title: 'Map', headerShown: false, tabBarIcon: icon('map', 'map-outline'), tabBarAccessibilityLabel: 'Live map' }} />
       <Tabs.Screen name="projects" options={{ title: 'Projects', tabBarIcon: icon('business', 'business-outline') }} />
       <Tabs.Screen name="explore" options={{ title: 'Explore', tabBarIcon: icon('compass', 'compass-outline') }} />
-      <Tabs.Screen name="account" options={{ title: 'Account', tabBarIcon: icon('person-circle', 'person-circle-outline') }} />
+      <Tabs.Screen name="account" options={{ title: 'Profile', tabBarIcon: icon('person-circle', 'person-circle-outline'), tabBarAccessibilityLabel: 'Profile and settings' }} />
     </Tabs>
   );
 }

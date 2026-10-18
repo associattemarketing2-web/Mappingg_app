@@ -8,7 +8,7 @@
 |---|---|
 | Leaflet map, OpenStreetMap tiles, start view Mundhwa 18.5215 / 73.9140 z14.5 | ✅ MapLibre (native), same tiles, same start view |
 | Satellite (Esri World Imagery) / Night mode toggle | ✅ same cycle Map → Satellite → Night (night = inverted OSM, like the website's CSS filter) |
-| Pins coloured by status, project logo inside, size small/medium/large, “highlighted” radar | ◐ round pins drawn as map layers (fast with 500+ pins): status colour ring, logo inside, size scale, soft radar ring for highlighted |
+| Pins coloured by status, project logo inside, size small/medium/large, “highlighted” radar | ✅ the website's teardrop pin (round head, tail, ground shadow — images drawn from the website CSS by `scripts/build-pin-icons.mjs`), logo on the head, size scale, pulsing radar ring for highlighted; drawn as map layers so 600+ pins stay fast |
 | Infrastructure markers (emoji, colour, size, custom types), hover card | ◐ native markers; tap shows the card (no hover on phones) |
 | Roads / metro lines / proposed roads (dashed), bridge casing, hover card | ✅ |
 | Main boundary (dashed red polygon) | ✅ |
@@ -54,8 +54,15 @@
 | Stay signed in (rolling 60-day session), sign out | ✅ secure storage |
 | Buyer: My profile, compare list | ✅ |
 | Agent: favourites | ✅ · ❌ “projects I enquired about” (no API) |
-| Developer: projects list, add/edit (held for review), ask to delete, notifications | ✅ · ❌ Excel/CSV bulk upload and picture upload (use the website) · ❌ developer Map Editor (desktop tool) |
-| Super-admin, team editor, intake panel | ❌ staff tools stay on the website |
+| Approved developer: Dashboard, Map Editor, Projects Intake (incl. Excel/CSV upload, pictures), Profile, notifications | ✅ the website's developer panel inside the app (`/panel`), app-style frame |
+| Super-admin / team panel: Dashboard, Map Editor, Developers, Developer projects, Projects Intake, Leads, Accounts, Blogs, Employees, Backups, Developer API, SEO & Health, Settings, Profile — tabs per role/permissions | ✅ the website's own panel inside the app (`/panel`) — same options and permissions; app bottom bar, “More” sheet, Profile at the bottom right (Profile / Settings / Live map / Sign out) |
+
+## App frame for the panels
+
+- Front page (`/welcome`) → Sign in → each account opens its own home: buyers, agents and view-only developers the live map; approved developers and staff their panel.
+- Panels are the website pages in a WebView (`src/components/panel`, `src/lib/panelBridge.ts`). The bridge signs the WebView in with the app session, hides the website header / tab row / account menu, reports the tabs (with badges) to the app's bottom bar, and passes downloads (CSV exports, backups, map image), copy, share and links to the phone. “View on map” links open the app's live map.
+- The Map Editor and the admin Projects Intake open full screen and stay loaded once opened.
+- New native modules: `react-native-webview`, `expo-file-system`, `expo-sharing`, `expo-clipboard` — a new build (APK / dev client) is needed.
 
 ## Quality notes
 

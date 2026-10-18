@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/Button';
 import { Screen } from '@/components/ui/Screen';
 import { TextField } from '@/components/ui/TextField';
 import { colors, fonts, radius } from '@/constants/theme';
-import { useAuth } from '@/providers/AuthProvider';
+import { panelOf, useAuth } from '@/providers/AuthProvider';
 import { errorMessage } from '@/services/api/errors';
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -25,9 +25,12 @@ export default function SignInScreen() {
     setBusy(true);
     try {
       const user = await signIn(email.trim().toLowerCase(), password);
+      // Each account opens its own home: live map, developer panel or super-admin.
       if (user.needsMobile) router.replace('/auth/add-mobile');
-      else if (router.canGoBack()) router.back();
-      else router.replace('/');
+      else {
+        if (router.canDismiss()) router.dismissAll();
+        router.replace(panelOf(user) ? '/panel' : '/');
+      }
     } catch (e) {
       setError(errorMessage(e));
     } finally {

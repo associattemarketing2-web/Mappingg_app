@@ -46,6 +46,9 @@ export default function RootLayout() {
               }}
             >
               <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+              <Stack.Screen name="welcome" options={{ headerShown: false, animation: 'fade' }} />
+              <Stack.Screen name="panel" options={{ headerShown: false, gestureEnabled: false, animation: 'fade' }} />
+              <Stack.Screen name="live-map" options={{ headerShown: false }} />
               <Stack.Screen name="project/[slug]" options={{ title: 'Project' }} />
               <Stack.Screen name="browse/[kind]/[slug]" options={{ title: '' }} />
               <Stack.Screen name="auth/sign-in" options={{ title: 'Sign in', presentation: 'modal' }} />

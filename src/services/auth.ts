@@ -125,8 +125,11 @@ export async function resetPassword(input: { email: string; otp: string; ticket:
 
 /** The current session, or null when signed out. The server also renews the cookie here. */
 export async function fetchSession(): Promise<SessionUser | null> {
-  const res = await apiRequest<{ session: { user: RawUser } | null }>('/api/auth/session', { auth: true });
-  return res?.session?.user ? toUser(res.session.user) : null;
+  const res = await apiRequest<{ session: { user: RawUser; home?: string } | null }>('/api/auth/session', { auth: true });
+  if (!res?.session?.user) return null;
+  const user = toUser(res.session.user);
+  if (typeof res.session.home === 'string') user.home = res.session.home;
+  return user;
 }
 
 export async function logout(): Promise<void> {

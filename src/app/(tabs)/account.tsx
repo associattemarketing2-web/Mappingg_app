@@ -11,7 +11,7 @@ import { Screen } from '@/components/ui/Screen';
 import { config } from '@/constants/config';
 import { EMAIL, LEGAL_PAGES, siteLink, SOCIALS, whatsappGeneralUrl, WHATSAPP_DISPLAY } from '@/constants/contact';
 import { colors, fonts, radius, TOUCH } from '@/constants/theme';
-import { awaitingApproval, isAgent, isBuyer, isDeveloper, isStaff, useAuth } from '@/providers/AuthProvider';
+import { awaitingApproval, isAgent, isBuyer, isDeveloper, isStaff, panelOf, useAuth } from '@/providers/AuthProvider';
 import { getNotifications } from '@/services/account';
 
 const ROLE_LABEL: Record<string, string> = {
@@ -97,9 +97,7 @@ export default function AccountScreen() {
               />
             </>
           ) : null}
-          {isStaff(user) ? (
-            <Text style={styles.staffNote}>The super-admin panel is on the website. Open www.mappingg.com/dashboard/s-admin in a browser.</Text>
-          ) : null}
+          {panelOf(user) ? <Row icon="speedometer-outline" label={isStaff(user) ? 'Open super admin' : 'Open developer panel'} onPress={() => router.replace('/panel')} /> : null}
           <Button title="Sign out" variant="danger" icon="log-out-outline" onPress={confirmSignOut} style={styles.signOut} />
         </View>
       ) : status === 'loading' ? null : (
@@ -179,7 +177,6 @@ const styles = StyleSheet.create({
   badge: { minWidth: 22, height: 22, borderRadius: 11, backgroundColor: colors.danger, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6 },
   badgeText: { color: '#fff', fontFamily: fonts.bold, fontSize: 12 },
   signOut: { marginTop: 6 },
-  staffNote: { fontFamily: fonts.regular, fontSize: 13, color: colors.muted },
   logo: { width: 180, height: 64 },
   btn: { marginTop: 6 },
   section: { marginTop: 22, marginBottom: 10 },

@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType, type Ref } from 'react';
 import { FlatList, Keyboard, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -20,7 +20,7 @@ import { buildSuggestions, interpretQuery, matchSuggestions, MUNDHWA, pinsInArea
 import { useMapData, usePins } from '@/hooks/usePublicData';
 import { useProjectActions } from '@/hooks/useProjectActions';
 import { useCompare, useFavorites } from '@/hooks/useSavedList';
-import { awaitingApproval, isAgent, isBuyer, useAuth } from '@/providers/AuthProvider';
+import { awaitingApproval, isAgent, isBuyer, panelOf, useAuth } from '@/providers/AuthProvider';
 import { useToast } from '@/providers/ToastProvider';
 import { hasCoords } from '@/services/publicData';
 import type { AreaBoundary, InfraMarker, Pin, Road } from '@/types/models';
@@ -38,13 +38,16 @@ const NEAR_ME_KM = 6;
 export default function MapScreen() {
   const { status, user, signOut } = useAuth();
   if (status === 'loading') return <LoadingState label="Opening the map…" />;
-  if (status === 'signedOut' || !user) return <MapGate kind="guest" />;
+  // Signed out → the app's front page; staff and approved developers → their panel.
+  if (status === 'signedOut' || !user) return <Redirect href="/welcome" />;
   if (user.needsMobile) return <MapGate kind="mobile" />;
+  if (panelOf(user)) return <Redirect href="/panel" />;
   if (awaitingApproval(user)) return <MapGate kind="pending" onSignOut={signOut} />;
   return <LiveMapScreen />;
 }
 
-function LiveMapScreen() {
+/** The live map. `onBack` adds a back button (used when opened from a panel). */
+export function LiveMapScreen({ onBack }: { onBack?: () => void }) {
   const router = useRouter();
   const params = useLocalSearchParams<{ pin?: string }>();
   const toast = useToast();
@@ -288,6 +291,13 @@ function LiveMapScreen() {
       <SafeAreaView edges={['top']} style={styles.top} pointerEvents="box-none">
         <OfflineBanner />
         <View style={styles.topInner} pointerEvents="box-none">
+          <View style={styles.searchRow}>
+          {onBack ? (
+            <Pressable onPress={onBack} accessibilityRole="button" accessibilityLabel="Back" style={styles.back}>
+              <Ionicons name="arrow-back" size={22} color={colors.mapInk} />
+            </Pressable>
+          ) : null}
+          <View style={styles.flexOnly}>
           <SearchBar
             value={query}
             onChange={onType}
@@ -299,6 +309,8 @@ function LiveMapScreen() {
               applyQuery('');
             }}
           />
+          </View>
+          </View>
           {!suggestions.length ? (
             <>
               <Toolbar
@@ -444,6 +456,9 @@ function MapListFallback({ pins, reason, onRetry }: { pins: Pin[]; reason: 'expo
 const styles = StyleSheet.create({
   flex: { flex: 1, backgroundColor: colors.mapPaper },
   top: { position: 'absolute', left: 0, right: 0, top: 0 },
+  searchRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
+  flexOnly: { flex: 1 },
+  back: { width: 48, height: 48, borderRadius: 24, backgroundColor: 'rgba(255,255,255,0.97)', alignItems: 'center', justifyContent: 'center', ...shadow.card },
   topInner: { paddingHorizontal: 12, paddingTop: 8 },
   compareBar: {
     position: 'absolute',

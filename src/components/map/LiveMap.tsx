@@ -10,9 +10,9 @@ import {
   type StyleSpecification,
 } from '@maplibre/maplibre-react-native';
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Image as RNImage, StyleSheet, Text, View } from 'react-native';
 import { BUILT_IN_INFRA, INFRA_SIZES, isBridgeLike, type InfraTypeMeta } from '@/constants/infra';
-import { statusColor } from '@/constants/status';
+import { asPinStatus, statusColor } from '@/constants/status';
 import { colors } from '@/constants/theme';
 import type { Bounds } from '@/lib/geo';
 import { withWidth } from '@/services/publicData';
@@ -50,6 +50,29 @@ interface Props {
 
 const START = { lat: 18.5215, lng: 73.914, zoom: 14.5 };
 const PIN_SCALE: Record<Pin['size'], number> = { small: 0.78, medium: 1, large: 1.35 };
+const PIN_SIZES = ['small', 'medium', 'large'] as const;
+
+// The website's teardrop pin (scripts/build-pin-icons.mjs draws them from the
+// website's CSS). The tip sits on the coordinate; the round head's centre is
+// 30pt above it and its white face has an 11pt radius.
+const PIN_IMAGES = {
+  'pin-available': require('@assets/pins/pin-available.png'),
+  'pin-available-dot': require('@assets/pins/pin-available-dot.png'),
+  'pin-sold': require('@assets/pins/pin-sold.png'),
+  'pin-sold-dot': require('@assets/pins/pin-sold-dot.png'),
+  'pin-construction': require('@assets/pins/pin-construction.png'),
+  'pin-construction-dot': require('@assets/pins/pin-construction-dot.png'),
+  'pin-upcoming': require('@assets/pins/pin-upcoming.png'),
+  'pin-upcoming-dot': require('@assets/pins/pin-upcoming-dot.png'),
+} as const;
+const HEAD_Y = 30;
+const FACE_R = 10.5;
+
+/** Logo size (pt) that fits inside the round face, keeping its aspect ratio. */
+function logoFit(aspect: number): number {
+  const a = aspect > 0 && Number.isFinite(aspect) ? aspect : 1;
+  return (2 * FACE_R * a) / Math.sqrt(1 + a * a); // width of the inscribed box
+}
 
 // An empty base style; the raster sources are added below as components so the
 // basemap can be switched without reloading the style.
@@ -89,57 +112,96 @@ export const LiveMap = forwardRef<LiveMapHandle, Props>(function LiveMap(props, 
     return m;
   }, [pins]);
   const [images, setImages] = useState<Record<string, string>>({});
-  const pending = useRef(new Set<string>());
+  // Pixel size of each loaded logo, so it can be fitted inside the pin's face.
+  const [logoDims, setLogoDims] = useState<Record<string, { w: number; h: number }>>({});
+  const requested = useRef(new Set<string>());
+  const pending = useRef<Record<string, { url: string; w: number; h: number }>>({});
   const flushTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const onImageMissing = useCallback(
-    (e: { nativeEvent: { image: string } }) => {
-      const name = e.nativeEvent.image;
-      if (!imageUrls.has(name)) return;
-      pending.current.add(name);
-      if (flushTimer.current) return;
-      flushTimer.current = setTimeout(() => {
-        flushTimer.current = null;
-        const add = [...pending.current];
-        pending.current.clear();
-        setImages((prev) => {
-          const next = { ...prev };
-          for (const n of add) {
-            const u = imageUrls.get(n);
-            if (u) next[n] = u;
-          }
-          return next;
-        });
-      }, 120);
-    },
-    [imageUrls],
-  );
+  const mounted = useRef(true);
   useEffect(
     () => () => {
+      mounted.current = false;
       if (flushTimer.current) clearTimeout(flushTimer.current);
     },
     [],
   );
+  const flush = useCallback(() => {
+    if (flushTimer.current) return;
+    flushTimer.current = setTimeout(() => {
+      flushTimer.current = null;
+      if (!mounted.current) return;
+      const add = pending.current;
+      pending.current = {};
+      setImages((prev) => {
+        const next = { ...prev };
+        for (const [n, v] of Object.entries(add)) next[n] = v.url;
+        return next;
+      });
+      setLogoDims((prev) => {
+        const next = { ...prev };
+        for (const [n, v] of Object.entries(add)) next[n] = { w: v.w, h: v.h };
+        return next;
+      });
+    }, 120);
+  }, []);
+  const onImageMissing = useCallback(
+    (e: { nativeEvent: { image: string } }) => {
+      const name = e.nativeEvent.image;
+      const url = imageUrls.get(name);
+      if (!url || requested.current.has(name)) return;
+      requested.current.add(name);
+      // Read the logo's size first, then add it — so it appears already fitted.
+      RNImage.getSize(
+        url,
+        (w, h) => {
+          pending.current[name] = { url, w, h };
+          flush();
+        },
+        () => {
+          requested.current.delete(name); // broken logo: the pin keeps its plain face
+        },
+      );
+    },
+    [flush, imageUrls],
+  );
+
+  const allImages = useMemo(() => ({ ...PIN_IMAGES, ...images }), [images]);
+
+  const anyHighlighted = useMemo(() => pins.some((p) => p.highlighted), [pins]);
 
   const pinById = useMemo(() => new Map(pins.map((p) => [p.id, p])), [pins]);
   const pinFeatures = useMemo<GeoJSON.FeatureCollection<GeoJSON.Point>>(
     () => ({
       type: 'FeatureCollection',
-      features: pins.map((p) => ({
-        type: 'Feature',
-        id: p.id,
-        geometry: { type: 'Point', coordinates: [p.lng, p.lat] },
-        properties: {
+      features: pins.map((p) => {
+        const scale = PIN_SCALE[p.size] ?? 1;
+        const icon = `pin-${p.id}`;
+        const hasImage = imageUrls.has(icon);
+        const dims = logoDims[icon];
+        // icon-size for the logo: its fitted width (pt) over its pixel width.
+        const logoSize = dims && dims.w > 0 && dims.h > 0 ? (logoFit(dims.w / dims.h) * scale) / dims.w : 0.16 * scale;
+        return {
+          type: 'Feature' as const,
           id: p.id,
-          color: statusColor(p.status),
-          scale: PIN_SCALE[p.size] ?? 1,
-          highlighted: p.highlighted,
-          hasImage: imageUrls.has(`pin-${p.id}`),
-          icon: `pin-${p.id}`,
-          sort: p.highlighted ? 1 : 0,
-        },
-      })),
+          geometry: { type: 'Point' as const, coordinates: [p.lng, p.lat] },
+          properties: {
+            id: p.id,
+            color: statusColor(p.status),
+            size: p.size,
+            scale,
+            highlighted: p.highlighted,
+            hasImage,
+            shape: `pin-${asPinStatus(p.status)}${hasImage ? '' : '-dot'}`,
+            icon,
+            logoSize,
+            // icon-offset is in the logo's own (scaled) pixels: lift it onto the head.
+            logoOffset: [0, -(HEAD_Y * scale) / logoSize],
+            sort: p.highlighted ? 1 : 0,
+          },
+        };
+      }),
     }),
-    [pins, imageUrls],
+    [pins, imageUrls, logoDims],
   );
 
   const roadFeatures = useMemo<GeoJSON.FeatureCollection<GeoJSON.LineString>>(() => {
@@ -274,7 +336,7 @@ export const LiveMap = forwardRef<LiveMapHandle, Props>(function LiveMap(props, 
         />
       </GeoJSONSource>
 
-      <Images images={images} onImageMissing={onImageMissing} />
+      <Images images={allImages} onImageMissing={onImageMissing} />
 
       <GeoJSONSource
         id="pins"
@@ -287,57 +349,54 @@ export const LiveMap = forwardRef<LiveMapHandle, Props>(function LiveMap(props, 
           if (pin) props.onPinPress(pin);
         }}
       >
-        {/* "Highlighted" projects get a soft radar ring, like the website's blinking pin. */}
+        {/* Rings drawn around the pin's round head (30pt above the tip, scaled per
+            pin size). circle-translate can't vary per pin, so one layer per size. */}
+        {anyHighlighted ? <RadarLayers /> : null}
+        {PIN_SIZES.map((size) => {
+          const s = PIN_SCALE[size];
+          const lift: [number, number] = [0, -HEAD_Y * s];
+          return [
+            <Layer
+              key={`sel-${size}`}
+              id={`pin-selected-${size}`}
+              type="circle"
+              filter={['all', ['in', ['get', 'id'], ['literal', [selectedId || '', pulseId || '']]], ['==', ['get', 'size'], size]]}
+              paint={{
+                'circle-radius': 19 * s,
+                'circle-color': 'rgba(0,0,0,0)',
+                'circle-stroke-color': colors.mapInk,
+                'circle-stroke-width': 3,
+                'circle-translate': lift,
+              }}
+            />,
+          ];
+        })}
+        {/* The teardrop pin itself — tip on the project's coordinate. */}
         <Layer
-          id="pin-radar"
-          type="circle"
-          filter={['==', ['get', 'highlighted'], true]}
-          paint={{ 'circle-radius': ['*', 30, ['get', 'scale']], 'circle-color': ['get', 'color'], 'circle-opacity': 0.22 }}
-        />
-        <Layer
-          id="pin-body"
-          type="circle"
-          layout={{ 'circle-sort-key': ['get', 'sort'] }}
-          paint={{
-            'circle-radius': ['*', 17, ['get', 'scale']],
-            'circle-color': ['get', 'color'],
-            'circle-stroke-color': '#ffffff',
-            'circle-stroke-width': 2.5,
-            'circle-pitch-alignment': 'map',
+          id="pin-shape"
+          type="symbol"
+          layout={{
+            'icon-image': ['get', 'shape'],
+            'icon-size': ['get', 'scale'],
+            'icon-anchor': 'bottom',
+            'icon-allow-overlap': true,
+            'icon-ignore-placement': true,
+            'symbol-sort-key': ['get', 'sort'],
           }}
         />
-        <Layer
-          id="pin-face"
-          type="circle"
-          filter={['==', ['get', 'hasImage'], true]}
-          paint={{ 'circle-radius': ['*', 13.5, ['get', 'scale']], 'circle-color': '#ffffff' }}
-        />
+        {/* Project logo on the pin's white face. */}
         <Layer
           id="pin-logo"
           type="symbol"
           filter={['==', ['get', 'hasImage'], true]}
           layout={{
             'icon-image': ['get', 'icon'],
-            'icon-size': ['*', 0.22, ['get', 'scale']],
+            'icon-size': ['get', 'logoSize'],
+            'icon-offset': ['get', 'logoOffset'],
+            'icon-anchor': 'center',
             'icon-allow-overlap': true,
             'icon-ignore-placement': true,
-          }}
-        />
-        <Layer
-          id="pin-dot"
-          type="circle"
-          filter={['!=', ['get', 'hasImage'], true]}
-          paint={{ 'circle-radius': ['*', 5, ['get', 'scale']], 'circle-color': '#ffffff' }}
-        />
-        <Layer
-          id="pin-selected"
-          type="circle"
-          filter={['in', ['get', 'id'], ['literal', [selectedId || '', pulseId || '']]]}
-          paint={{
-            'circle-radius': ['*', 23, ['get', 'scale']],
-            'circle-color': 'rgba(0,0,0,0)',
-            'circle-stroke-color': colors.mapInk,
-            'circle-stroke-width': 3,
+            'symbol-sort-key': ['get', 'sort'],
           }}
         />
       </GeoJSONSource>
@@ -379,6 +438,45 @@ export const LiveMap = forwardRef<LiveMapHandle, Props>(function LiveMap(props, 
     </MapLibreMap>
   );
 });
+
+/** The website's pulsing radar ring on highlighted pins: grows from 0.6x to
+ * 2.6x of the 28pt head while fading out, every 1.6s. Own state, so only these
+ * layers update on each tick. */
+function RadarLayers() {
+  const [radar, setRadar] = useState({ radius: 14, opacity: 0 });
+  useEffect(() => {
+    const started = Date.now();
+    const timer = setInterval(() => {
+      const t = ((Date.now() - started) % 1600) / 1600;
+      const eased = 1 - (1 - t) * (1 - t);
+      setRadar({ radius: 14 * (0.6 + 2 * eased), opacity: 0.9 * (1 - eased) });
+    }, 80);
+    return () => clearInterval(timer);
+  }, []);
+  return (
+    <>
+      {PIN_SIZES.map((size) => {
+        const s = PIN_SCALE[size];
+        return (
+          <Layer
+            key={size}
+            id={`pin-radar-${size}`}
+            type="circle"
+            filter={['all', ['==', ['get', 'highlighted'], true], ['==', ['get', 'size'], size]]}
+            paint={{
+              'circle-radius': radar.radius * s,
+              'circle-color': 'rgba(0,0,0,0)',
+              'circle-stroke-color': ['get', 'color'],
+              'circle-stroke-width': 3 * s,
+              'circle-stroke-opacity': radar.opacity,
+              'circle-translate': [0, -HEAD_Y * s],
+            }}
+          />
+        );
+      })}
+    </>
+  );
+}
 
 function typeMeta(type: string, custom: InfraTypeRow[]): InfraTypeMeta | undefined {
   const c = custom.find((t) => t.key === type);
