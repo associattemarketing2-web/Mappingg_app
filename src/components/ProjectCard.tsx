@@ -5,6 +5,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { listStatusLabel } from '@/constants/status';
 import { colors, fonts, radius, shadow } from '@/constants/theme';
 import { isFieldOn, shown } from '@/lib/fieldVisibility';
+import { useGuestGate } from '@/providers/GuestGateProvider';
 import { withWidth } from '@/services/publicData';
 import type { Pin } from '@/types/models';
 import { Chip, Logo, StatusBadge } from './ProjectBits';
@@ -12,11 +13,15 @@ import { Chip, Logo, StatusBadge } from './ProjectBits';
 /** A project in a list (website: components/seo/ProjectCard.tsx). */
 export const ProjectCard = memo(function ProjectCard({ pin, right }: { pin: Pin; right?: React.ReactNode }) {
   const router = useRouter();
+  const gate = useGuestGate();
   const meta = [shown(pin, 'developer', pin.developer), shown(pin, 'location', pin.locality)].filter(Boolean).join(' · ') || 'Real estate project';
   const usp = shown(pin, 'key_usp', pin.keyUsp);
   return (
     <Pressable
-      onPress={() => router.push({ pathname: '/project/[slug]', params: { slug: pin.slug } })}
+      onPress={() => {
+        // Guests get a few free project views, then the sign-up popup.
+        if (gate.allow('project', pin.id)) router.push({ pathname: '/project/[slug]', params: { slug: pin.slug } });
+      }}
       accessibilityRole="button"
       accessibilityLabel={`${pin.title}. ${meta}. ${listStatusLabel(pin.status)}`}
       accessibilityHint="Opens the project details"

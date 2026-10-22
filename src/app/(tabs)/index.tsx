@@ -21,6 +21,7 @@ import { useMapData, usePins } from '@/hooks/usePublicData';
 import { useProjectActions } from '@/hooks/useProjectActions';
 import { useCompare, useFavorites } from '@/hooks/useSavedList';
 import { awaitingApproval, isAgent, isBuyer, panelOf, useAuth } from '@/providers/AuthProvider';
+import { useGuestGate } from '@/providers/GuestGateProvider';
 import { useToast } from '@/providers/ToastProvider';
 import { hasCoords } from '@/services/publicData';
 import type { AreaBoundary, InfraMarker, Pin, Road } from '@/types/models';
@@ -52,6 +53,7 @@ export function LiveMapScreen({ onBack }: { onBack?: () => void }) {
   const params = useLocalSearchParams<{ pin?: string }>();
   const toast = useToast();
   const { user } = useAuth();
+  const gate = useGuestGate();
   const pinsQ = usePins();
   const mapQ = useMapData();
   const { enquireAbout, share, busyId } = useProjectActions();
@@ -141,12 +143,14 @@ export function LiveMapScreen({ onBack }: { onBack?: () => void }) {
 
   const openPin = useCallback(
     (pin: Pin, fly = true) => {
+      // Guests get a few free pins, then the sign-up popup.
+      if (!gate.allow('pin', pin.id)) return;
       setInfo(null);
       setSelected(pin);
       if (fly) map.current?.flyTo(pin.lat, pin.lng, 16);
       pulse(pin.id);
     },
-    [pulse],
+    [gate, pulse],
   );
 
   // First view: a shared / linked pin, else the visitor's location, else the full map
@@ -319,7 +323,6 @@ export function LiveMapScreen({ onBack }: { onBack?: () => void }) {
                 onNearMe={() => void locate({ silent: false, ask: true })}
                 locating={locating}
               />
-              <Legend />
             </>
           ) : null}
         </View>
@@ -328,6 +331,8 @@ export function LiveMapScreen({ onBack }: { onBack?: () => void }) {
       {!selected && !info ? (
         <>
           <SideButtons onZoomIn={() => map.current?.zoomBy(0.75)} onZoomOut={() => map.current?.zoomBy(-0.75)} />
+          {/* Bottom-left; sits above the compare / sign-up bar when one is shown. */}
+          <Legend bottom={gate.isGuest || (buyer && compare.pins.length) ? 74 : 20} />
           {buyer && compare.pins.length ? (
             <Pressable
               onPress={() => router.push('/compare')}
@@ -338,6 +343,19 @@ export function LiveMapScreen({ onBack }: { onBack?: () => void }) {
               <Ionicons name="git-compare" size={18} color="#fff" />
               <Text style={styles.compareText}>
                 Compare {compare.pins.length}/{compare.max}
+              </Text>
+            </Pressable>
+          ) : null}
+          {gate.isGuest ? (
+            <Pressable
+              onPress={() => gate.openSignup(gate.remaining('pin') ? 'feature' : 'limit-pin')}
+              accessibilityRole="button"
+              accessibilityLabel="Sign up free to unlock every project"
+              style={[styles.compareBar, styles.guestBar]}
+            >
+              <Ionicons name={gate.remaining('pin') ? 'lock-open' : 'lock-closed'} size={16} color="#fff" />
+              <Text style={styles.compareText}>
+                {gate.remaining('pin') ? `${gate.remaining('pin')} free views left · Sign up` : 'Sign up free to see every project'}
               </Text>
             </Pressable>
           ) : null}
@@ -474,6 +492,7 @@ const styles = StyleSheet.create({
     ...shadow.card,
   },
   compareText: { color: '#fff', fontFamily: fonts.semibold, fontSize: 14 },
+  guestBar: { backgroundColor: colors.forest, right: 80 },
   notice: { position: 'absolute', left: 12, right: 80, bottom: 76, backgroundColor: colors.road50, borderRadius: radius.md, padding: 8 },
   noticeText: { fontFamily: fonts.medium, fontSize: 12, color: colors.ink },
   fallbackList: { padding: 16 },

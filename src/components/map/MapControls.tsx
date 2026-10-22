@@ -97,14 +97,11 @@ function Pill({ icon, label, onPress, a11y }: { icon: keyof typeof Ionicons.glyp
   );
 }
 
-export function Legend() {
+/** Pin colour legend at the bottom-left of the map: a "⋯" button that opens upwards. */
+export function Legend({ bottom = 20 }: { bottom?: number }) {
   const [open, setOpen] = useState(false);
   return (
-    <View style={styles.legend}>
-      <Pressable onPress={() => setOpen((o) => !o)} accessibilityRole="button" accessibilityState={{ expanded: open }} accessibilityLabel="Legend" style={styles.legendHead}>
-        <Text style={styles.legendTitle}>Legend</Text>
-        <Ionicons name={open ? 'chevron-up' : 'chevron-down'} size={14} color={colors.mapInk} />
-      </Pressable>
+    <View style={[styles.legend, { bottom }]}>
       {open ? (
         <View style={styles.legendBody}>
           {(Object.keys(STATUS_COLOR) as PinStatus[]).map((s) => (
@@ -116,6 +113,16 @@ export function Legend() {
           <Text style={styles.legendNote}>Tap a pin to see the project card.</Text>
         </View>
       ) : null}
+      <Pressable
+        onPress={() => setOpen((o) => !o)}
+        accessibilityRole="button"
+        accessibilityState={{ expanded: open }}
+        accessibilityLabel={open ? 'Hide legend' : 'Show legend'}
+        hitSlop={6}
+        style={styles.legendHead}
+      >
+        <Ionicons name={open ? 'close' : 'ellipsis-horizontal'} size={22} color={colors.mapInk} />
+      </Pressable>
     </View>
   );
 }
@@ -184,10 +191,9 @@ const styles = StyleSheet.create({
     ...shadow.card,
   },
   pillText: { fontFamily: fonts.semibold, fontSize: 13, color: colors.mapInk },
-  legend: { alignSelf: 'flex-start', marginTop: 8, backgroundColor: 'rgba(255,255,255,0.95)', borderRadius: radius.md, ...shadow.card },
-  legendHead: { flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 40, paddingHorizontal: 12 },
-  legendTitle: { fontFamily: fonts.display, fontSize: 14, color: colors.mapInk },
-  legendBody: { paddingHorizontal: 12, paddingBottom: 10, gap: 6 },
+  legend: { position: 'absolute', left: 12, alignItems: 'flex-start', backgroundColor: 'rgba(255,255,255,0.95)', borderRadius: 22, ...shadow.card },
+  legendHead: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  legendBody: { paddingHorizontal: 14, paddingTop: 12, paddingBottom: 2, gap: 6 },
   legendRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   swatch: { width: 14, height: 14, borderRadius: 7, borderWidth: 2, borderColor: '#fff' },
   legendText: { fontFamily: fonts.medium, fontSize: 13, color: colors.mapInk },

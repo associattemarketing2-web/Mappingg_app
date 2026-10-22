@@ -20,7 +20,7 @@
 | Project card (logo, name, developer, location, status, type, RERA, configuration, price, possession/launch, USP, custom fields, video/brochure, actions) honouring “Public Card Visibility” | ✅ bottom sheet |
 | Project video autoplays (muted) in the card | ◐ YouTube thumbnail; tap opens YouTube (no embedded player) |
 | Enquire now — signed-in one-tap lead + details panel | ✅ → project page with “Enquiry sent / already enquired” note |
-| Enquiry form for guests on the map | ◐ the map is sign-in only (as on the website); guests enquire from project pages via the contact form, like the website's project pages |
+| Enquiry form for guests on the map | ◐ guests see the live map (front page + full map) with 3 free pins and 3 free project views, then a sign-up popup (`src/providers/GuestGateProvider.tsx`); guests enquire via the contact form |
 | Share | ✅ native share sheet (link to the public project page) |
 | Compare (buyers, max 3, saved to account) + compare table | ✅ |
 | Favourites (agents, saved to account) + popup | ✅ |
@@ -59,7 +59,7 @@
 
 ## App frame for the panels
 
-- Front page (`/welcome`) → Sign in → each account opens its own home: buyers, agents and view-only developers the live map; approved developers and staff their panel.
+- Front page (`/welcome`): real live map, stats, featured projects, sign-up popup on launch (closable) → Sign in → each account opens its own home: buyers, agents and view-only developers the live map; approved developers and staff their panel.
 - Panels are the website pages in a WebView (`src/components/panel`, `src/lib/panelBridge.ts`). The bridge signs the WebView in with the app session, hides the website header / tab row / account menu, reports the tabs (with badges) to the app's bottom bar, and passes downloads (CSV exports, backups, map image), copy, share and links to the phone. “View on map” links open the app's live map.
 - The Map Editor and the admin Projects Intake open full screen and stay loaded once opened.
 - New native modules: `react-native-webview`, `expo-file-system`, `expo-sharing`, `expo-clipboard` — a new build (APK / dev client) is needed.

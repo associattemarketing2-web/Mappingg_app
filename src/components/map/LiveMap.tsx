@@ -9,12 +9,13 @@ import {
   type CameraRef,
   type StyleSpecification,
 } from '@maplibre/maplibre-react-native';
-import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
-import { Image as RNImage, StyleSheet, Text, View } from 'react-native';
+import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
+import { StyleSheet, Text, View } from 'react-native';
 import { BUILT_IN_INFRA, INFRA_SIZES, isBridgeLike, type InfraTypeMeta } from '@/constants/infra';
 import { asPinStatus, statusColor } from '@/constants/status';
 import { colors } from '@/constants/theme';
 import type { Bounds } from '@/lib/geo';
+import { cachedLogos, fetchLogos, logoKey, type CachedLogo } from '@/services/logoCache';
 import { withWidth } from '@/services/publicData';
 import type { InfraMarker, InfraTypeRow, Pin, Road } from '@/types/models';
 
@@ -102,70 +103,56 @@ export const LiveMap = forwardRef<LiveMapHandle, Props>(function LiveMap(props, 
     },
   }));
 
-  // ---- pin logos: loaded on demand, only for pins the map is drawing ----------
-  const imageUrls = useMemo(() => {
+  // ---- pin logos ---------------------------------------------------------------
+  // Logos are saved on the phone (services/logoCache): saved ones show on the
+  // first frame, missing ones download in the background, nearest pins first.
+  // A pin switches to its logo face only once the logo is ready, so the map
+  // never waits on a "missing image" (which made logos appear only after zooming).
+  const logoUrlOf = useMemo(() => {
     const m = new Map<string, string>();
     for (const p of pins) {
       const u = withWidth(p.image, 96);
-      if (u) m.set(`pin-${p.id}`, u);
+      if (u) m.set(p.id, u);
     }
     return m;
   }, [pins]);
-  const [images, setImages] = useState<Record<string, string>>({});
-  // Pixel size of each loaded logo, so it can be fitted inside the pin's face.
-  const [logoDims, setLogoDims] = useState<Record<string, { w: number; h: number }>>({});
-  const requested = useRef(new Set<string>());
-  const pending = useRef<Record<string, { url: string; w: number; h: number }>>({});
-  const flushTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const mounted = useRef(true);
-  useEffect(
-    () => () => {
-      mounted.current = false;
-      if (flushTimer.current) clearTimeout(flushTimer.current);
-    },
-    [],
-  );
-  const flush = useCallback(() => {
-    if (flushTimer.current) return;
-    flushTimer.current = setTimeout(() => {
-      flushTimer.current = null;
-      if (!mounted.current) return;
-      const add = pending.current;
-      pending.current = {};
-      setImages((prev) => {
-        const next = { ...prev };
-        for (const [n, v] of Object.entries(add)) next[n] = v.url;
-        return next;
-      });
-      setLogoDims((prev) => {
-        const next = { ...prev };
-        for (const [n, v] of Object.entries(add)) next[n] = { w: v.w, h: v.h };
-        return next;
-      });
-    }, 120);
-  }, []);
-  const onImageMissing = useCallback(
-    (e: { nativeEvent: { image: string } }) => {
-      const name = e.nativeEvent.image;
-      const url = imageUrls.get(name);
-      if (!url || requested.current.has(name)) return;
-      requested.current.add(name);
-      // Read the logo's size first, then add it — so it appears already fitted.
-      RNImage.getSize(
-        url,
-        (w, h) => {
-          pending.current[name] = { url, w, h };
-          flush();
-        },
-        () => {
-          requested.current.delete(name); // broken logo: the pin keeps its plain face
-        },
-      );
-    },
-    [flush, imageUrls],
-  );
+  const [logos, setLogos] = useState<Record<string, CachedLogo>>({});
+  const logosRef = useRef(logos);
+  useEffect(() => {
+    logosRef.current = logos;
+  }, [logos]);
+  useEffect(() => {
+    let stop: (() => void) | null = null;
+    let cancelled = false;
+    const [cx, cy] = center.current;
+    const firstPin = new Map<string, Pin>();
+    for (const p of pins) {
+      const u = logoUrlOf.get(p.id);
+      if (u && !firstPin.has(u)) firstPin.set(u, p);
+    }
+    const dist = (u: string) => {
+      const p = firstPin.get(u)!;
+      return (p.lng - cx) ** 2 + (p.lat - cy) ** 2;
+    };
+    const urls = [...firstPin.keys()].filter((u) => !logosRef.current[u]).sort((a, b) => dist(a) - dist(b));
+    if (!urls.length) return;
+    void cachedLogos(urls).then((saved) => {
+      if (cancelled) return;
+      if (Object.keys(saved).length) setLogos((prev) => ({ ...prev, ...saved }));
+      const missing = urls.filter((u) => !saved[u]);
+      if (missing.length) stop = fetchLogos(missing, (ready) => setLogos((prev) => ({ ...prev, ...ready })));
+    });
+    return () => {
+      cancelled = true;
+      stop?.();
+    };
+  }, [pins, logoUrlOf]);
 
-  const allImages = useMemo(() => ({ ...PIN_IMAGES, ...images }), [images]);
+  const allImages = useMemo(() => {
+    const out: Record<string, string | number> = { ...PIN_IMAGES };
+    for (const [url, logo] of Object.entries(logos)) out[logoKey(url)] = logo.uri;
+    return out;
+  }, [logos]);
 
   const anyHighlighted = useMemo(() => pins.some((p) => p.highlighted), [pins]);
 
@@ -175,9 +162,10 @@ export const LiveMap = forwardRef<LiveMapHandle, Props>(function LiveMap(props, 
       type: 'FeatureCollection',
       features: pins.map((p) => {
         const scale = PIN_SCALE[p.size] ?? 1;
-        const icon = `pin-${p.id}`;
-        const hasImage = imageUrls.has(icon);
-        const dims = logoDims[icon];
+        const url = logoUrlOf.get(p.id);
+        const dims = url ? logos[url] : undefined;
+        const hasImage = !!dims;
+        const icon = url ? logoKey(url) : '';
         // icon-size for the logo: its fitted width (pt) over its pixel width.
         const logoSize = dims && dims.w > 0 && dims.h > 0 ? (logoFit(dims.w / dims.h) * scale) / dims.w : 0.16 * scale;
         return {
@@ -201,7 +189,7 @@ export const LiveMap = forwardRef<LiveMapHandle, Props>(function LiveMap(props, 
         };
       }),
     }),
-    [pins, imageUrls, logoDims],
+    [pins, logoUrlOf, logos],
   );
 
   const roadFeatures = useMemo<GeoJSON.FeatureCollection<GeoJSON.LineString>>(() => {
@@ -241,8 +229,7 @@ export const LiveMap = forwardRef<LiveMapHandle, Props>(function LiveMap(props, 
     <MapLibreMap
       style={StyleSheet.absoluteFill}
       mapStyle={BASE_STYLE}
-      attribution
-      attributionPosition={{ bottom: 8, left: 8 }}
+      attribution={false}
       logo={false}
       compass={false}
       touchPitch={false}
@@ -336,7 +323,7 @@ export const LiveMap = forwardRef<LiveMapHandle, Props>(function LiveMap(props, 
         />
       </GeoJSONSource>
 
-      <Images images={allImages} onImageMissing={onImageMissing} />
+      <Images images={allImages} />
 
       <GeoJSONSource
         id="pins"

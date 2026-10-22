@@ -3,6 +3,7 @@ import { focusManager, onlineManager, QueryClient, QueryClientProvider } from '@
 import { useEffect, useState, type ReactNode } from 'react';
 import { AppState, Platform } from 'react-native';
 import { isApiError } from '@/services/api/errors';
+import { persistQueries, restoreQueries } from '@/services/queryPersist';
 
 // Queries pause while offline and refetch when the connection or the app comes back.
 onlineManager.setEventListener((setOnline) =>
@@ -31,10 +32,27 @@ function makeClient() {
 
 export function QueryProvider({ children }: { children: ReactNode }) {
   const [client] = useState(makeClient);
+  // The saved map data is put back first (a few ms), so screens open with it.
+  const [restored, setRestored] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    const unsubscribe = persistQueries(client);
+    const done = () => alive && setRestored(true);
+    const fallback = setTimeout(done, 1500); // never hold the app on a slow disk
+    void restoreQueries(client).finally(() => {
+      clearTimeout(fallback);
+      done();
+    });
+    return () => {
+      alive = false;
+      clearTimeout(fallback);
+      unsubscribe();
+    };
+  }, [client]);
   useEffect(() => {
     if (Platform.OS === 'web') return;
     const sub = AppState.addEventListener('change', (s) => focusManager.setFocused(s === 'active'));
     return () => sub.remove();
   }, []);
-  return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+  return <QueryClientProvider client={client}>{restored ? children : null}</QueryClientProvider>;
 }
