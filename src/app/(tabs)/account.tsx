@@ -13,6 +13,7 @@ import { EMAIL, LEGAL_PAGES, siteLink, SOCIALS, whatsappGeneralUrl, WHATSAPP_DIS
 import { colors, fonts, radius, TOUCH } from '@/constants/theme';
 import { awaitingApproval, isAgent, isBuyer, isDeveloper, isStaff, panelOf, useAuth } from '@/providers/AuthProvider';
 import { getNotifications } from '@/services/account';
+import { requestAccountDeletion } from '@/services/contact';
 
 const ROLE_LABEL: Record<string, string> = {
   buyer: 'Buyer / Investor',
@@ -33,6 +34,35 @@ export default function AccountScreen() {
       { text: 'Cancel', style: 'cancel' },
       { text: 'Sign out', style: 'destructive', onPress: () => void signOut() },
     ]);
+
+  const confirmDelete = () => {
+    if (!user) return;
+    Alert.alert(
+      'Delete your account?',
+      'We will permanently delete your Mappingg account and personal data within 7 days and confirm by email. This cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete account',
+          style: 'destructive',
+          onPress: () => {
+            requestAccountDeletion(user)
+              .then(() => {
+                Alert.alert('Request received', 'Your account deletion request has been sent. You have been signed out.');
+                void signOut();
+              })
+              .catch(() => {
+                const body = encodeURIComponent(`Please delete my Mappingg account and personal data.\nEmail: ${user.email}\nAccount ID: ${user.id}`);
+                Alert.alert('Could not send the request', `Please email us at ${EMAIL} and we will delete your account.`, [
+                  { text: 'Cancel', style: 'cancel' },
+                  { text: 'Email us', onPress: () => void Linking.openURL(`mailto:${EMAIL}?subject=${encodeURIComponent('Delete my account')}&body=${body}`) },
+                ]);
+              });
+          },
+        },
+      ],
+    );
+  };
 
   const openSite = (path: string) => void WebBrowser.openBrowserAsync(siteLink(path)).catch(() => Linking.openURL(siteLink(path)));
 
@@ -99,6 +129,7 @@ export default function AccountScreen() {
           ) : null}
           {panelOf(user) ? <Row icon="speedometer-outline" label={isStaff(user) ? 'Open super admin' : 'Open developer panel'} onPress={() => router.replace('/panel')} /> : null}
           <Button title="Sign out" variant="danger" icon="log-out-outline" onPress={confirmSignOut} style={styles.signOut} />
+          {!isStaff(user) ? <Button title="Delete my account" variant="ghost" icon="trash-outline" onPress={confirmDelete} /> : null}
         </View>
       ) : status === 'loading' ? null : (
         <View style={styles.card}>

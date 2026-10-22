@@ -50,6 +50,29 @@ export async function sendContact(input: ContactInput): Promise<void> {
 }
 
 /**
+ * Asks the Mappingg team to delete the signed-in account and its data
+ * (required by Google Play / App Store for apps that let people sign up).
+ * The website has no self-service delete route yet, so the request is sent
+ * through the contact form and handled by the team.
+ */
+export async function requestAccountDeletion(user: { id: string; name: string; email: string; mobile: string; role: string }): Promise<void> {
+  await sendContact({
+    name: user.name || user.email,
+    email: user.email,
+    phone: user.mobile || '',
+    subject: 'Something else',
+    message: `ACCOUNT DELETION REQUEST (from the mobile app). Please delete my Mappingg account and personal data.\nEmail: ${user.email}\nRole: ${user.role}\nAccount ID: ${user.id}`,
+    city: '',
+    locality: '',
+    budget: '',
+    bhk: '',
+    timeline: '',
+    consent_call: false,
+    consent_whatsapp: false,
+  });
+}
+
+/**
  * Optional copy of a signed-in enquiry to the Google Sheet the website's live
  * map also writes to. Best effort only: the lead is already saved on the server.
  */

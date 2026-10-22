@@ -278,7 +278,9 @@ export const PanelWebView = forwardRef<PanelWebViewHandle, Props>(function Panel
         geolocationEnabled
         textZoom={100}
         overScrollMode="never"
-        decelerationRate="normal"
+        // A number, not "normal": Android passes the value straight to native code,
+        // which expects a Double and crashes on a string (0.998 = iOS "normal").
+        decelerationRate={0.998}
         bounces={false}
         applicationNameForUserAgent="MappinggApp/1.0"
       />
