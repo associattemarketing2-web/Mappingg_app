@@ -1,5 +1,7 @@
+import { mapTiles, type MapTilesConfig } from '@/constants/mapTiles';
+
 // Credit line for the map tiles currently on screen. OpenStreetMap's licence
-// (ODbL) and Esri's terms both require visible attribution on the map.
+// (ODbL), MapTiler's and Esri's terms all require visible attribution on the map.
 
 export type BasemapKind = 'map' | 'satellite' | 'night';
 
@@ -8,12 +10,7 @@ export interface MapAttribution {
   url: string;
 }
 
-const OSM: MapAttribution = { text: '© OpenStreetMap contributors', url: 'https://www.openstreetmap.org/copyright' };
-const ESRI: MapAttribution = {
-  text: 'Imagery © Esri, Maxar, Earthstar Geographics',
-  url: 'https://www.esri.com/en-us/legal/terms/data-attributions',
-};
-
-export function mapAttribution(basemap: BasemapKind): MapAttribution {
-  return basemap === 'satellite' ? ESRI : OSM;
+export function mapAttribution(basemap: BasemapKind, tiles: MapTilesConfig = mapTiles): MapAttribution {
+  const src = basemap === 'satellite' ? tiles.satellite : tiles.street;
+  return { text: src.attribution, url: src.attributionUrl };
 }

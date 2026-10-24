@@ -67,6 +67,7 @@ export default function RootLayout() {
                 <Stack.Screen name="my-projects/edit" options={{ title: 'Project', presentation: 'modal' }} />
                 <Stack.Screen name="notifications" options={{ title: 'Notifications' }} />
                 <Stack.Screen name="contact" options={{ title: 'Contact us' }} />
+                <Stack.Screen name="delete-account" options={{ title: 'Delete account', presentation: 'modal' }} />
                 <Stack.Screen name="+not-found" options={{ title: 'Not found' }} />
               </Stack>
             </GuestGateProvider>

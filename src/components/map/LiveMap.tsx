@@ -6,12 +6,15 @@ import {
   Map as MapLibreMap,
   Marker,
   RasterSource,
+  TransformRequestManager,
   type CameraRef,
   type StyleSpecification,
 } from '@maplibre/maplibre-react-native';
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import ExpoConstants from 'expo-constants';
 import { BUILT_IN_INFRA, INFRA_SIZES, isBridgeLike, type InfraTypeMeta } from '@/constants/infra';
+import { mapTiles, tileUserAgent } from '@/constants/mapTiles';
 import { mapAttribution } from '@/lib/mapAttribution';
 import { openUrl } from '@/lib/openLink';
 import { asPinStatus, statusColor } from '@/constants/status';
@@ -51,6 +54,19 @@ interface Props {
   onMapPress(): void;
   onReady?(): void;
   onLoadError?(): void;
+}
+
+// Identify the app on every tile request (required by OpenStreetMap's tile
+// policy; also lets a MapTiler key be locked to this app). Runs once when the
+// map module loads. Never let a header problem stop the map from opening.
+try {
+  TransformRequestManager.addHeader({
+    id: 'mappingg-user-agent',
+    name: 'User-Agent',
+    value: tileUserAgent(ExpoConstants.expoConfig?.version ?? ''),
+  });
+} catch {
+  /* older native build without the transform module: tiles still load */
 }
 
 const START = { lat: 18.5215, lng: 73.914, zoom: 14.5 };
@@ -253,15 +269,16 @@ export const LiveMap = forwardRef<LiveMapHandle, Props>(function LiveMap(props, 
     >
       <Camera ref={camera} initialViewState={{ center: [START.lng, START.lat], zoom: START.zoom }} minZoom={4} maxZoom={20} />
 
+      {/* Tile sources come from constants/mapTiles (OSM + Esri by default, or a licensed provider). */}
       <RasterSource
-        id="osm"
-        tiles={['https://tile.openstreetmap.org/{z}/{x}/{y}.png']}
-        tileSize={256}
-        maxzoom={19}
-        attribution="© OpenStreetMap contributors"
+        id={mapTiles.street.id}
+        tiles={mapTiles.street.tiles}
+        tileSize={mapTiles.street.tileSize}
+        maxzoom={mapTiles.street.maxzoom}
+        attribution={mapTiles.street.attribution}
       >
         <Layer
-          id="osm-tiles"
+          id="street-tiles"
           type="raster"
           layout={{ visibility: basemap === 'satellite' ? 'none' : 'visible' }}
           paint={
@@ -272,13 +289,13 @@ export const LiveMap = forwardRef<LiveMapHandle, Props>(function LiveMap(props, 
         />
       </RasterSource>
       <RasterSource
-        id="esri"
-        tiles={['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}']}
-        tileSize={256}
-        maxzoom={19}
-        attribution="Imagery © Esri, Maxar, Earthstar Geographics"
+        id={mapTiles.satellite.id}
+        tiles={mapTiles.satellite.tiles}
+        tileSize={mapTiles.satellite.tileSize}
+        maxzoom={mapTiles.satellite.maxzoom}
+        attribution={mapTiles.satellite.attribution}
       >
-        <Layer id="esri-tiles" type="raster" layout={{ visibility: basemap === 'satellite' ? 'visible' : 'none' }} />
+        <Layer id="satellite-tiles" type="raster" layout={{ visibility: basemap === 'satellite' ? 'visible' : 'none' }} />
       </RasterSource>
 
       {boundaryFeature ? (

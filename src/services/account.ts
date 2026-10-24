@@ -1,5 +1,6 @@
 import type { BuyerProfile, DeveloperNotification, DeveloperProject, EnquireResult } from '@/types/models';
 import { apiRequest } from './api/client';
+import { isApiError } from './api/errors';
 
 // Signed-in account features — the website's /api/my/* routes. The server
 // decides who may do what (buyer / agent / developer); the app only shows the
@@ -107,4 +108,28 @@ export async function getNotifications(): Promise<NotificationFeed> {
 }
 export async function markNotificationsRead(): Promise<void> {
   await apiRequest('/api/my/notifications', { method: 'POST', auth: true });
+}
+
+// ---- account deletion (App Store 5.1.1(v) / Google Play account deletion) -----
+
+export type DeleteAccountResult = 'deleted' | 'unsupported';
+
+/**
+ * Permanently deletes the signed-in buyer / developer / agent account on the
+ * server (POST /api/my/account/delete — see docs/ACCOUNT-DELETION.md). The
+ * server re-checks the password, refuses staff accounts and ends the session.
+ *
+ * Returns 'unsupported' when the website doesn't have the route yet (a plain
+ * 404 page, no JSON error code); callers then fall back to a deletion request.
+ * A wrong password comes back as a validation error (400, code
+ * "wrong_password") — never 401, which would sign the person out.
+ */
+export async function deleteAccount(password: string): Promise<DeleteAccountResult> {
+  try {
+    await apiRequest('/api/my/account/delete', { method: 'POST', auth: true, body: { password, confirm: 'DELETE' } });
+    return 'deleted';
+  } catch (e) {
+    if (isApiError(e, 'not_found') && !e.code) return 'unsupported';
+    throw e;
+  }
 }
