@@ -69,3 +69,18 @@
 - Loading, empty, error (with retry), offline banner and pull-to-refresh on every data screen.
 - Touch targets ≥ 44–48 dp, accessibility labels/roles on controls, text scaling capped (1.3–1.6×) so layouts don't break, safe areas and keyboard avoidance on forms.
 - No mock data: every project, developer, locality and RERA number comes from the live API.
+
+## Website changes of 17–20 Oct 2026, synced on 23 Oct 2026
+
+| Website change | App |
+|---|---|
+| “Official project page” custom fields hidden from the card and Compare | ✅ hidden on the pin card, project page and Compare (`isPublicCustomField`) |
+| “MahaRERA No.” → “RERA No.”; each number linked to its own state registry (MahaRERA, RERA Karnataka, Haryana RERA, UP RERA, Telangana RERA) | ✅ pin card, Compare, project page (`src/lib/rera.ts`); numbers from other states are no longer dropped, and unknown formats get no Verify link |
+| Map: “Couldn’t load the projects. Retrying…” while the first load fails | ✅ shown on the loading screen while the request is retried |
+| Project page: facts-only overview, new FAQs (price, configurations, RERA, possession), fields hidden by the admin left out | ✅ same text (`src/lib/projectMeta.ts`) |
+| ALL-CAPS project, developer and locality names shown in title case (“M/s.”, Pvt/Ltd kept) | ✅ display only; slugs unchanged |
+| Two projects sharing a pin number each keep their own page | ✅ `findPinBySlug` |
+| Super admin: “Edit all details” (Dashboard day list, Developers, Developer projects, Map Editor) opens the project’s full Projects Intake form | ✅ the panel reports the requested intake screen; the app opens it in its own Intake view. The Map Editor’s new-window fallback opens there too instead of the phone’s (signed-out) browser |
+| Dashboard: click a day in “Projects created day by day” | ✅ website panel (WebView); its “Project page” links open the app’s project screen |
+| Developer intake, scraped data, admin fixes, login role default | ✅ automatic — the panels are the website’s own pages, and auth is server-side |
+| SEO-only changes (pagination, page titles, crawler text, blog, landing copy) | ❌ not applicable to the app |

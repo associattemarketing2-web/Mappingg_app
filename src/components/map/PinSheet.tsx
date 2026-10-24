@@ -1,7 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import type { ReactNode } from 'react';
-import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { openUrl } from '@/lib/openLink';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { whatsappProjectUrl } from '@/constants/contact';
 import { mapStatusLabel } from '@/constants/status';
@@ -35,7 +36,7 @@ export function PinSheet({ pin, onClose, onEnquire, onShare, onDetails, compare,
   const vid = youtubeId(pin.youtubeVideoUrl);
 
   const rows: { key: string; label: string; value: string }[] = [
-    { key: 'rera', label: 'MahaRERA No.', value: shown(pin, 'rera', pin.reraNumber) },
+    { key: 'rera', label: 'RERA No.', value: shown(pin, 'rera', pin.reraNumber) },
     { key: 'configuration', label: 'Configuration', value: shown(pin, 'configuration', configValue) },
     { key: 'price', label: 'Starting Price', value: shown(pin, 'price', pin.price) },
     { key: 'possession', label: upcoming ? 'Launch' : 'Possession', value: shown(pin, 'possession', possession) },
@@ -82,7 +83,7 @@ export function PinSheet({ pin, onClose, onEnquire, onShare, onDetails, compare,
 
         {vid ? (
           <Pressable
-            onPress={() => Linking.openURL(youtubeWatchUrl(vid)).catch(() => undefined)}
+            onPress={() => openUrl(youtubeWatchUrl(vid))}
             accessibilityRole="link"
             accessibilityLabel="Watch the project video on YouTube"
             style={styles.media}
@@ -108,7 +109,7 @@ export function PinSheet({ pin, onClose, onEnquire, onShare, onDetails, compare,
           <Action icon="mail-unread-outline" label={enquiring ? 'Sending…' : 'Enquire'} primary onPress={() => onEnquire(pin)} disabled={enquiring} />
         ) : null}
         {isFieldOn(pin, 'whatsapp') ? (
-          <Action icon="logo-whatsapp" label="WhatsApp" color={colors.whatsapp} onPress={() => Linking.openURL(whatsappProjectUrl(pin.title)).catch(() => undefined)} />
+          <Action icon="logo-whatsapp" label="WhatsApp" color={colors.whatsapp} onPress={() => openUrl(whatsappProjectUrl(pin.title))} />
         ) : null}
         <Action icon="share-social-outline" label="Share" onPress={() => onShare(pin)} />
         {compare ? <Action icon={compare.on ? 'git-compare' : 'git-compare-outline'} label={compare.on ? 'Added' : 'Compare'} active={compare.on} onPress={compare.toggle} /> : null}

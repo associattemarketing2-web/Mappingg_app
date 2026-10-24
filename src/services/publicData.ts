@@ -1,5 +1,5 @@
 import { apiUrl } from '@/constants/config';
-import { displayDeveloperName } from '@/lib/developerName';
+import { displayDeveloperName, displayPlaceName, displayProjectName } from '@/lib/developerName';
 import { localitiesOf } from '@/lib/locality';
 import { isPropertyProject } from '@/lib/projectFilter';
 import { projectSlug } from '@/lib/slug';
@@ -77,9 +77,12 @@ export function normalizePin(r: Row): Pin | null {
   const id = str(r.id);
   if (!id) return null;
   const number = num(r.number) ?? 0;
-  const title = str(r.title) || `Project #${number}`;
+  const rawTitle = str(r.title) || `Project #${number}`;
+  // ALL-CAPS names are shown in title case, like the website (display only).
+  const title = displayProjectName(rawTitle) || rawTitle;
   const location = str(r.location);
-  const locality = localitiesOf(location)[0] || '';
+  const rawLocality = localitiesOf(location)[0] || '';
+  const locality = displayPlaceName(rawLocality) || rawLocality;
   const size = str(r.size);
   const pin: Pin = {
     id,
@@ -109,7 +112,8 @@ export function normalizePin(r: Row): Pin | null {
     brochureImage: mediaUrl(r.brochure_image),
     updatedAt: str(r.updated_at),
     createdAt: str(r.created_at),
-    slug: projectSlug(title, locality, number),
+    // From the stored values: the website's URLs, whatever the display form.
+    slug: projectSlug(rawTitle, rawLocality, number),
     locality,
     isProject: true,
   };

@@ -1,6 +1,3 @@
-/**
- * @jest-environment jsdom
- */
 import { bootHtml, bridgeScript, goToTab } from '../panelBridge';
 
 // A stand-in for the website's panel shell (components/admin/AdminApp.tsx):

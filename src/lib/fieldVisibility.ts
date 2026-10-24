@@ -1,3 +1,4 @@
+import { reraList } from '@/lib/rera';
 import type { CustomField, Pin, VisibilityField } from '@/types/models';
 
 /** Visible unless the admin explicitly switched the field off (same rule as the website). */
@@ -6,9 +7,17 @@ export function isFieldOn(pin: Pick<Pin, 'fieldVisibility'>, field: VisibilityFi
   return v !== false;
 }
 
-/** Admin-added custom fields that are switched on and have content. */
+// Research links kept on a pin (the developer's own project page) are for the
+// team, not visitors: never shown on the card, the project page or in Compare
+// (same rule as the website's live map).
+const HIDDEN_CUSTOM_LABEL = /^\s*(developer\s+)?official\s+project\s+page\b/i;
+export function isPublicCustomField(cf: Pick<CustomField, 'label'>): boolean {
+  return !HIDDEN_CUSTOM_LABEL.test(String(cf.label || ''));
+}
+
+/** Admin-added custom fields that are switched on, public and have content. */
 export function visibleCustomFields(pin: Pick<Pin, 'customFields'>): CustomField[] {
-  return pin.customFields.filter((cf) => cf && cf.visible !== false && (cf.label || cf.value));
+  return pin.customFields.filter((cf) => cf && cf.visible !== false && (cf.label || cf.value) && isPublicCustomField(cf));
 }
 
 /** The value of a field only when it is set and visible. */
@@ -16,10 +25,10 @@ export function shown(pin: Pin, field: VisibilityField, value: string | undefine
   return value && isFieldOn(pin, field) ? value : '';
 }
 
-/** MahaRERA-style registration numbers in the RERA field (for the "Verify" link). */
+/** RERA registration numbers in the RERA field, from any state (for the registry "Verify" link). */
 export function reraNumbers(pin: Pin): string[] {
   if (!pin.reraNumber || !isFieldOn(pin, 'rera')) return [];
-  return pin.reraNumber.split(/[\s,;/]+/).filter((x) => /^P[RM]?\d{6,}/i.test(x));
+  return reraList(pin.reraNumber);
 }
 
 /** Key USP text split into bullet points (same splitting as the website's details panel). */

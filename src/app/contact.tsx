@@ -1,7 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
-import { Linking, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
+import { openUrl } from '@/lib/openLink';
 import { AppText } from '@/components/ui/AppText';
 import { Button } from '@/components/ui/Button';
 import { Checkbox, ChoicePills } from '@/components/ui/Choice';
@@ -39,6 +40,7 @@ export default function ContactScreen() {
   const hasNeeds = buying && Object.values(needs).some(Boolean);
 
   const submit = async () => {
+    if (busy) return; // e.g. the keyboard's "Go" key while a request is running
     setError('');
     if (!name.trim()) return setError('Please add your name.');
     if (!message.trim() && !hasNeeds) return setError(buying ? 'Tell us what you’re looking for, or add a message.' : 'Please add a message.');
@@ -75,7 +77,7 @@ export default function ContactScreen() {
           </AppText>
           <AppText style={styles.center}>Our team will get back to you shortly at the contact details you shared.</AppText>
           <Button title="Explore projects" onPress={() => router.replace('/projects')} style={styles.stretch} />
-          <Button title="Chat on WhatsApp" variant="whatsapp" icon="logo-whatsapp" onPress={() => void Linking.openURL(whatsappGeneralUrl())} style={styles.stretch} />
+          <Button title="Chat on WhatsApp" variant="whatsapp" icon="logo-whatsapp" onPress={() => void openUrl(whatsappGeneralUrl())} style={styles.stretch} />
         </View>
       </Screen>
     );

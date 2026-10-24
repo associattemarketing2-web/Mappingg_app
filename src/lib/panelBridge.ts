@@ -196,8 +196,15 @@ function report(force){
   var who = document.querySelector('.adm2-top-right .who');
   var img = who && who.querySelector('img');
   var nameEl = document.querySelector('.adm2-top-right .who-meta b');
+  // "Edit all details" opens one project in Projects Intake by giving the embedded
+  // intake its own address (/intake#/review/<id>?from=pin&t=...). The app shows
+  // Intake in its own view, so it is told which screen the panel asked for.
+  var fr = document.querySelector('iframe.adm-frame[src^="/intake"]');
+  var fsrc = fr ? String(fr.getAttribute('src') || '') : '';
+  var hashAt = fsrc.indexOf('#');
   var msg = { type: 'shell', tabs: list, menu: menuItems || [], active: on ? on.label : activeMenu,
-    name: nameEl ? nameEl.textContent.trim() : '', avatar: img ? img.src : '' };
+    name: nameEl ? nameEl.textContent.trim() : '', avatar: img ? img.src : '',
+    intake: hashAt >= 0 ? fsrc.slice(hashAt) : '' };
   var s = JSON.stringify(msg);
   if (force || s !== last) { last = s; post(msg); }
 }
@@ -226,6 +233,9 @@ function watch(){
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', watch); else watch();
 })(); true;`;
 }
+
+/** JS the app runs to open a page of the website in this WebView (a hash-only change doesn't reload). */
+export const goToPath = (url: string) => `location.href = ${js(url)}; true;`;
 
 /** JS the app runs to switch the panel to a tab / menu page by its label. */
 export const goToTab = (name: string) => `window.__mgGo && window.__mgGo(${js(name)}); true;`;

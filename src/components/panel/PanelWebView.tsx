@@ -8,7 +8,7 @@ import { WebView as RNWebView, type WebViewMessageEvent, type WebViewNavigation,
 import { ErrorState } from '@/components/ui/States';
 import { config, isHttpsApi } from '@/constants/config';
 import { colors } from '@/constants/theme';
-import { bootHtml, bridgeScript, goToTab, type PanelMode } from '@/lib/panelBridge';
+import { bootHtml, bridgeScript, goToPath, goToTab, type PanelMode } from '@/lib/panelBridge';
 import { useToast } from '@/providers/ToastProvider';
 import { ApiError } from '@/services/api/errors';
 
@@ -41,10 +41,14 @@ export interface ShellState {
   active: string;
   name: string;
   avatar: string;
+  /** Screen the panel asked Projects Intake to open ("#/review/<id>?from=pin…"), or ''. */
+  intake: string;
 }
 
 export interface PanelWebViewHandle {
   go(tab: string): void;
+  /** Opens a website path (e.g. /intake#/review/<id>) in this WebView. */
+  navigate(path: string): void;
   reload(): void;
   /** Steps back inside the panel; false when there is nothing to go back to. */
   back(): boolean;
@@ -61,6 +65,10 @@ interface Props {
   onSignedOut(): void;
   /** A link to the live map (/map?pin=...). */
   onOpenMap(pin?: string): void;
+  /** A link to Projects Intake opened as a new window (e.g. the Map Editor's "Edit all details"). */
+  onOpenIntake?(hash: string): void;
+  /** A link to a public project page (/projects/<slug>). */
+  onOpenProject?(slug: string): void;
 }
 
 // react-native-webview 14.0.1 types its class as Component<Props & undefined>,
@@ -85,7 +93,7 @@ function parse(url: string): URL | null {
 }
 
 export const PanelWebView = forwardRef<PanelWebViewHandle, Props>(function PanelWebView(props, ref) {
-  const { path, mode, token, email, onShell, onSignedOut, onOpenMap } = props;
+  const { path, mode, token, email, onShell, onSignedOut, onOpenMap, onOpenIntake, onOpenProject } = props;
   const toast = useToast();
   const web = useRef<WebViewRef>(null);
   const canGoBack = useRef(false);
@@ -105,6 +113,9 @@ export const PanelWebView = forwardRef<PanelWebViewHandle, Props>(function Panel
   useImperativeHandle(ref, () => ({
     go(tab) {
       web.current?.injectJavaScript(goToTab(tab));
+    },
+    navigate(to) {
+      web.current?.injectJavaScript(goToPath(`${ORIGIN}${to}`));
     },
     reload() {
       setFailed(false);
@@ -126,6 +137,17 @@ export const PanelWebView = forwardRef<PanelWebViewHandle, Props>(function Panel
         onOpenMap(u.searchParams.get('pin') || undefined);
         return;
       }
+      // The full project form opens in the app's own (signed-in) Projects Intake
+      // view — the phone's browser has no Mappingg session.
+      if (ours && onOpenIntake && /^\/intake\/?$/.test(u.pathname)) {
+        onOpenIntake(u.hash);
+        return;
+      }
+      const project = ours ? /^\/projects\/([^/]+)\/?$/.exec(u.pathname) : null;
+      if (project && onOpenProject) {
+        onOpenProject(decodeURIComponent(project[1]!));
+        return;
+      }
       if (u.protocol === 'http:' || u.protocol === 'https:') {
         if (/^(wa\.me|api\.whatsapp\.com)$/i.test(u.hostname)) {
           void Linking.openURL(url).catch(() => undefined);
@@ -136,7 +158,7 @@ export const PanelWebView = forwardRef<PanelWebViewHandle, Props>(function Panel
       }
       void Linking.openURL(url).catch(() => toast('No app on this phone can open that link.'));
     },
-    [onOpenMap, toast],
+    [onOpenIntake, onOpenMap, onOpenProject, toast],
   );
 
   const saveDownload = useCallback(
@@ -174,6 +196,7 @@ export const PanelWebView = forwardRef<PanelWebViewHandle, Props>(function Panel
             active: String(msg.active || ''),
             name: String(msg.name || ''),
             avatar: String(msg.avatar || ''),
+            intake: String(msg.intake || ''),
           });
           break;
         case 'downloading':

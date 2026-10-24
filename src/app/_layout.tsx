@@ -14,6 +14,9 @@ import { ToastProvider } from '@/providers/ToastProvider';
 
 void SplashScreen.preventAutoHideAsync().catch(() => undefined);
 
+// A crash while rendering any screen shows a "Try again" page instead of a blank app.
+export { AppErrorBoundary as ErrorBoundary } from '@/components/AppErrorBoundary';
+
 export default function RootLayout() {
   const [loaded, fontError] = useFonts({
     Inter_400Regular,

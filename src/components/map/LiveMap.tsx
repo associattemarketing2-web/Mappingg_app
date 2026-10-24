@@ -10,8 +10,10 @@ import {
   type StyleSpecification,
 } from '@maplibre/maplibre-react-native';
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { BUILT_IN_INFRA, INFRA_SIZES, isBridgeLike, type InfraTypeMeta } from '@/constants/infra';
+import { mapAttribution } from '@/lib/mapAttribution';
+import { openUrl } from '@/lib/openLink';
 import { asPinStatus, statusColor } from '@/constants/status';
 import { colors } from '@/constants/theme';
 import type { Bounds } from '@/lib/geo';
@@ -41,6 +43,8 @@ interface Props {
   selectedId: string | null;
   pulseId: string | null;
   me: { lat: number; lng: number } | null;
+  /** Run the highlighted-pin radar animation (off while the screen is hidden). */
+  animate?: boolean;
   onPinPress(pin: Pin): void;
   onInfraPress(marker: InfraMarker): void;
   onRoadPress(road: Road): void;
@@ -84,7 +88,7 @@ const BASE_STYLE: StyleSpecification = {
 };
 
 export const LiveMap = forwardRef<LiveMapHandle, Props>(function LiveMap(props, ref) {
-  const { pins, infra, roads, infraTypes, boundary, basemap, selectedId, pulseId, me } = props;
+  const { pins, infra, roads, infraTypes, boundary, basemap, selectedId, pulseId, me, animate = true } = props;
   const camera = useRef<CameraRef>(null);
   const zoom = useRef(START.zoom);
   const center = useRef<[number, number]>([START.lng, START.lat]);
@@ -225,7 +229,9 @@ export const LiveMap = forwardRef<LiveMapHandle, Props>(function LiveMap(props, 
   };
 
   const night = basemap === 'night';
+  const credit = mapAttribution(basemap);
   return (
+    <>
     <MapLibreMap
       style={StyleSheet.absoluteFill}
       mapStyle={BASE_STYLE}
@@ -338,7 +344,7 @@ export const LiveMap = forwardRef<LiveMapHandle, Props>(function LiveMap(props, 
       >
         {/* Rings drawn around the pin's round head (30pt above the tip, scaled per
             pin size). circle-translate can't vary per pin, so one layer per size. */}
-        {anyHighlighted ? <RadarLayers /> : null}
+        {anyHighlighted ? <RadarLayers animate={animate} /> : null}
         {PIN_SIZES.map((size) => {
           const s = PIN_SCALE[size];
           const lift: [number, number] = [0, -HEAD_Y * s];
@@ -423,15 +429,30 @@ export const LiveMap = forwardRef<LiveMapHandle, Props>(function LiveMap(props, 
         </Marker>
       ) : null}
     </MapLibreMap>
+    {/* Tile credit (required by OpenStreetMap / Esri); tap for the full notice. */}
+    <Pressable
+      onPress={() => void openUrl(credit.url)}
+      accessibilityRole="link"
+      accessibilityLabel={`Map data ${credit.text}`}
+      hitSlop={8}
+      style={styles.credit}
+    >
+      <Text style={styles.creditText} numberOfLines={1}>
+        {credit.text}
+      </Text>
+    </Pressable>
+    </>
   );
 });
 
 /** The website's pulsing radar ring on highlighted pins: grows from 0.6x to
  * 2.6x of the 28pt head while fading out, every 1.6s. Own state, so only these
  * layers update on each tick. */
-function RadarLayers() {
+function RadarLayers({ animate }: { animate: boolean }) {
   const [radar, setRadar] = useState({ radius: 14, opacity: 0 });
   useEffect(() => {
+    // Each tick re-renders map layers; don't spend battery on it while the map is hidden.
+    if (!animate) return;
     const started = Date.now();
     const timer = setInterval(() => {
       const t = ((Date.now() - started) % 1600) / 1600;
@@ -439,7 +460,7 @@ function RadarLayers() {
       setRadar({ radius: 14 * (0.6 + 2 * eased), opacity: 0.9 * (1 - eased) });
     }, 80);
     return () => clearInterval(timer);
-  }, []);
+  }, [animate]);
   return (
     <>
       {PIN_SIZES.map((size) => {
@@ -495,5 +516,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  credit: {
+    position: 'absolute',
+    right: 4,
+    bottom: 2,
+    maxWidth: '70%',
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: 4,
+    backgroundColor: 'rgba(255,255,255,0.8)',
+  },
+  creditText: { fontSize: 10, color: '#333' },
   meDot: { width: 14, height: 14, borderRadius: 7, backgroundColor: '#3b6ea5', borderWidth: 2.5, borderColor: '#fff' },
 });

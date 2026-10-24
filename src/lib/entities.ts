@@ -1,6 +1,7 @@
 import { STATUS_ROUTES } from '@/constants/status';
 import type { Pin } from '@/types/models';
 import { cityFrom, CITY_LABELS, hasCityHub, isCityKey, type CityKey } from './city';
+import { displayPlaceName } from './developerName';
 import { localitiesOf } from './locality';
 import { slugify } from './slug';
 
@@ -49,7 +50,7 @@ export const developerGroups = (pins: Pin[]) =>
 
 /** A project can appear under several localities it names. */
 export const localityGroups = (pins: Pin[]) =>
-  groupBy('locality', pins, (p) => localitiesOf(p.location).map((l) => ({ slug: slugify(l), label: l })));
+  groupBy('locality', pins, (p) => localitiesOf(p.location).map((l) => ({ slug: slugify(l), label: displayPlaceName(l) || l })));
 
 export const cityGroups = (pins: Pin[]) =>
   groupBy('city', pins, (p) => {

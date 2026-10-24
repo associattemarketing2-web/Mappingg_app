@@ -93,6 +93,8 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     'expo-font',
     'expo-image',
     'expo-web-browser',
+    'expo-sharing',
+    'expo-status-bar',
     ['expo-location', { locationWhenInUsePermission: LOCATION_REASON, isAndroidBackgroundLocationEnabled: false }],
     [
       'expo-splash-screen',

@@ -47,9 +47,15 @@ export function useDeveloperLogos(): Map<string, string> {
   }, [data]);
 }
 
-/** A project by its slug (any title prefix matches; the trailing number decides). */
+/**
+ * A project by its slug (any title prefix matches; the trailing number decides).
+ * When two projects share a number by mistake, the one whose own slug is this
+ * slug wins, so each keeps its page (same as the website's getPinBySlug).
+ */
 export function findPinBySlug(pins: Pin[] | undefined, slug: string): Pin | null {
   const n = projectNumberFromSlug(slug);
   if (n == null || !pins) return null;
-  return pins.find((p) => p.number === n) || null;
+  const same = pins.filter((p) => p.number === n && p.isProject);
+  if (!same.length) return pins.find((p) => p.number === n) || null;
+  return same.find((p) => p.slug === slug) || same[0]!;
 }

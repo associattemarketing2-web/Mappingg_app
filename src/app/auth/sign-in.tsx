@@ -20,6 +20,7 @@ export default function SignInScreen() {
   const [busy, setBusy] = useState(false);
 
   const submit = async () => {
+    if (busy) return; // e.g. the keyboard's "Go" key while signing in
     setError('');
     if (!EMAIL_RE.test(email.trim()) || !password) return setError('Enter a valid email and password.');
     setBusy(true);

@@ -2,20 +2,24 @@ import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
-import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { openUrl } from '@/lib/openLink';
 import { Chip, StatusBadge } from '@/components/ProjectBits';
 import { ProjectCard } from '@/components/ProjectCard';
 import { AppText } from '@/components/ui/AppText';
 import { Button } from '@/components/ui/Button';
 import { Screen } from '@/components/ui/Screen';
 import { EmptyState, ErrorState, LoadingState } from '@/components/ui/States';
-import { callUrl, directionsUrl, MAHARERA_VERIFY_URL, whatsappProjectUrl } from '@/constants/contact';
+import { callUrl, directionsUrl, whatsappProjectUrl } from '@/constants/contact';
 import { listStatusLabel, mapStatusLabel, STATUS_ROUTES } from '@/constants/status';
 import { colors, fonts, radius, TOUCH } from '@/constants/theme';
 import { cityOf, relatedProjects, typeLabel } from '@/lib/entities';
 import { CITY_LABELS, hasCityHub } from '@/lib/city';
 import { isFieldOn, reraNumbers, shown, uspPoints, visibleCustomFields } from '@/lib/fieldVisibility';
+import { displayPlaceName } from '@/lib/developerName';
 import { localitiesOf } from '@/lib/locality';
+import { projectFaqs, projectSummary, publicFacts } from '@/lib/projectMeta';
+import { reraRegistry } from '@/lib/rera';
 import { slugify } from '@/lib/slug';
 import { youtubeId, youtubeThumb, youtubeWatchUrl } from '@/lib/youtube';
 import { findPinBySlug, usePins } from '@/hooks/usePublicData';
@@ -66,6 +70,8 @@ function ProjectBody({ pin, all, enquiry, via, refreshing, onRefresh }: { pin: P
   const sold = pin.status === 'sold';
   const vid = youtubeId(pin.youtubeVideoUrl);
   const rera = reraNumbers(pin);
+  // The registry that issued the number (MahaRERA, RERA Karnataka, Haryana RERA…), with its website.
+  const reg = rera.length ? reraRegistry(rera[0]) : null;
   const usp = uspPoints(pin);
   const cover = withWidth(pin.image, 1000);
 
@@ -92,16 +98,19 @@ function ProjectBody({ pin, all, enquiry, via, refreshing, onRefresh }: { pin: P
     ...(pin.developer && isFieldOn(pin, 'developer') ? [{ label: `More by ${pin.developer}`, kind: 'developer', slug: slugify(pin.developer) }] : []),
     ...(statusRoute ? [{ label: `${statusRoute.label} projects`, kind: 'status', slug: statusRoute.slug }] : []),
     ...(pin.type ? [{ label: `${typeLabel(pin.type)} projects`, kind: 'type', slug: slugify(pin.type) }] : []),
-    ...localitiesOf(pin.location).map((l) => ({ label: `All projects in ${l}`, kind: 'locality', slug: slugify(l) })),
+    ...localitiesOf(pin.location).map((l) => ({ label: `All projects in ${displayPlaceName(l) || l}`, kind: 'locality', slug: slugify(l) })),
     ...(hasCityHub(cityKey) ? [{ label: `Real estate in ${city}`, kind: 'city', slug: cityKey }] : []),
   ];
   const related = relatedProjects(pin, all.filter((p) => p.isProject));
 
-  const faqs = [
-    loc && { q: `Where is ${pin.title} located?`, a: `${pin.title} is located in ${loc}${city ? `, ${city}` : ''}. You can see its exact position, surrounding infrastructure and nearby projects on the Mappingg live map.` },
-    pin.developer && isFieldOn(pin, 'developer') && { q: `Who is the developer of ${pin.title}?`, a: `${pin.title} is developed by ${pin.developer}.` },
-    pin.status && { q: `What is the current status of ${pin.title}?`, a: `${pin.title} is currently ${listStatusLabel(pin.status).toLowerCase()}${pin.possessionTimeline ? `, with possession ${pin.possessionTimeline}` : ''}.` },
-  ].filter(Boolean) as { q: string; a: string }[];
+  // Facts-only overview and FAQs, same text as the website's project page; every
+  // answer comes from a field shown here (src/lib/projectMeta.ts).
+  const pub = publicFacts(pin);
+  const overview = projectSummary(pub, loc, city, {
+    sameLocality: loc ? all.filter((p) => p.isProject && p.number !== pin.number && p.locality === loc).length : 0,
+    sameDeveloper: pub.developer ? all.filter((p) => p.isProject && p.number !== pin.number && p.developer === pin.developer).length : 0,
+  });
+  const faqs = projectFaqs(pub, loc, city);
 
   const signedIn = status === 'signedIn';
 
@@ -158,14 +167,16 @@ function ProjectBody({ pin, all, enquiry, via, refreshing, onRefresh }: { pin: P
         <View style={styles.rera}>
           <Ionicons name="shield-checkmark" size={22} color={colors.success} />
           <View style={styles.flex}>
-            <Text style={styles.reraLabel}>MahaRERA registration</Text>
+            <Text style={styles.reraLabel}>{reg?.name || 'RERA'} registration</Text>
             <Text style={styles.reraNo} selectable>
               {rera.join('  ')}
             </Text>
           </View>
-          <Pressable onPress={() => void Linking.openURL(MAHARERA_VERIFY_URL)} accessibilityRole="link" accessibilityLabel="Verify on the MahaRERA website" style={styles.reraBtn}>
-            <Text style={styles.reraBtnText}>Verify ↗</Text>
-          </Pressable>
+          {reg?.url ? (
+            <Pressable onPress={() => void openUrl(reg.url)} accessibilityRole="link" accessibilityLabel={`Verify on the ${reg.name} website`} style={styles.reraBtn}>
+              <Text style={styles.reraBtnText}>Verify ↗</Text>
+            </Pressable>
+          ) : null}
         </View>
       ) : shown(pin, 'rera', pin.reraNumber) ? (
         <View style={styles.rera}>
@@ -190,9 +201,9 @@ function ProjectBody({ pin, all, enquiry, via, refreshing, onRefresh }: { pin: P
           />
         ) : null}
         <View style={styles.actionRow}>
-          {isFieldOn(pin, 'whatsapp') ? <Small icon="logo-whatsapp" label="WhatsApp" color={colors.whatsapp} onPress={() => void Linking.openURL(whatsappProjectUrl(pin.title))} /> : null}
-          <Small icon="call" label="Call" onPress={() => void Linking.openURL(callUrl())} />
-          {hasCoords(pin) ? <Small icon="navigate" label="Directions" onPress={() => void Linking.openURL(directionsUrl(pin.lat, pin.lng))} /> : null}
+          {isFieldOn(pin, 'whatsapp') ? <Small icon="logo-whatsapp" label="WhatsApp" color={colors.whatsapp} onPress={() => void openUrl(whatsappProjectUrl(pin.title))} /> : null}
+          <Small icon="call" label="Call" onPress={() => void openUrl(callUrl())} />
+          {hasCoords(pin) ? <Small icon="navigate" label="Directions" onPress={() => void openUrl(directionsUrl(pin.lat, pin.lng))} /> : null}
           <Small icon="share-social" label="Share" onPress={() => void share(pin)} />
         </View>
         <View style={styles.actionRow}>
@@ -219,12 +230,20 @@ function ProjectBody({ pin, all, enquiry, via, refreshing, onRefresh }: { pin: P
 
       {vid ? (
         <Section title="Project walkthrough">
-          <Pressable onPress={() => void Linking.openURL(youtubeWatchUrl(vid))} accessibilityRole="link" accessibilityLabel={`Watch the ${pin.title} walkthrough on YouTube`}>
+          <Pressable onPress={() => void openUrl(youtubeWatchUrl(vid))} accessibilityRole="link" accessibilityLabel={`Watch the ${pin.title} walkthrough on YouTube`}>
             <Image source={{ uri: youtubeThumb(vid) }} style={styles.video} contentFit="cover" />
             <View style={styles.play}>
               <Ionicons name="play" size={28} color="#fff" />
             </View>
           </Pressable>
+        </Section>
+      ) : null}
+
+      {overview.length ? (
+        <Section title={`${pin.title} overview`}>
+          <Text style={styles.body} selectable>
+            {overview.join(' ')}
+          </Text>
         </Section>
       ) : null}
 

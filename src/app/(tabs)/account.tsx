@@ -4,7 +4,8 @@ import ExpoConstants from 'expo-constants';
 import { Image } from 'expo-image';
 import { useRouter, type Href } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
-import { Alert, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { openUrl } from '@/lib/openLink';
 import { AppText } from '@/components/ui/AppText';
 import { Button } from '@/components/ui/Button';
 import { Screen } from '@/components/ui/Screen';
@@ -55,7 +56,7 @@ export default function AccountScreen() {
                 const body = encodeURIComponent(`Please delete my Mappingg account and personal data.\nEmail: ${user.email}\nAccount ID: ${user.id}`);
                 Alert.alert('Could not send the request', `Please email us at ${EMAIL} and we will delete your account.`, [
                   { text: 'Cancel', style: 'cancel' },
-                  { text: 'Email us', onPress: () => void Linking.openURL(`mailto:${EMAIL}?subject=${encodeURIComponent('Delete my account')}&body=${body}`) },
+                  { text: 'Email us', onPress: () => void openUrl(`mailto:${EMAIL}?subject=${encodeURIComponent('Delete my account')}&body=${body}`) },
                 ]);
               });
           },
@@ -64,7 +65,7 @@ export default function AccountScreen() {
     );
   };
 
-  const openSite = (path: string) => void WebBrowser.openBrowserAsync(siteLink(path)).catch(() => Linking.openURL(siteLink(path)));
+  const openSite = (path: string) => void WebBrowser.openBrowserAsync(siteLink(path)).catch(() => openUrl(siteLink(path)));
 
   return (
     <Screen background={colors.land} onRefresh={status === 'signedIn' ? () => void refresh() : undefined}>
@@ -146,11 +147,11 @@ export default function AccountScreen() {
       </AppText>
       <View style={styles.card}>
         <Row icon="chatbox-ellipses-outline" label="Send us a message" onPress={() => router.push('/contact' as Href)} />
-        <Row icon="logo-whatsapp" label={`WhatsApp ${WHATSAPP_DISPLAY}`} onPress={() => void Linking.openURL(whatsappGeneralUrl())} />
-        <Row icon="mail-outline" label={EMAIL} onPress={() => void Linking.openURL(`mailto:${EMAIL}`)} />
+        <Row icon="logo-whatsapp" label={`WhatsApp ${WHATSAPP_DISPLAY}`} onPress={() => void openUrl(whatsappGeneralUrl())} />
+        <Row icon="mail-outline" label={EMAIL} onPress={() => void openUrl(`mailto:${EMAIL}`)} />
         <View style={styles.socials}>
           {SOCIALS.map((s) => (
-            <Pressable key={s.name} onPress={() => void Linking.openURL(s.href)} accessibilityRole="link" accessibilityLabel={s.name} style={styles.social}>
+            <Pressable key={s.name} onPress={() => void openUrl(s.href)} accessibilityRole="link" accessibilityLabel={s.name} style={styles.social}>
               <Ionicons name={s.icon} size={22} color={colors.forest} />
             </Pressable>
           ))}

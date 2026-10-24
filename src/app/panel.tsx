@@ -89,11 +89,32 @@ function Panel({ kind, PanelWebView }: { kind: PanelKind; PanelWebView: typeof P
   const [moreOpen, setMoreOpen] = useState(false);
   const [pending, setPending] = useState(''); // tab just tapped, until the panel confirms it
   const lastShellTab = useRef('');
+  // Intake's first address; later screens are opened inside the loaded view.
+  const [intakePath, setIntakePath] = useState(cfg.intake || '');
+  const intakeLoaded = useRef(false);
+  const lastIntakeHash = useRef('');
 
   const open = useCallback((s: Section) => {
     setSection(s);
     setLoaded((l) => (l.includes(s) ? l : [...l, s]));
   }, []);
+
+  // "Edit all details" (Dashboard day list, Developers, Developer projects, Map
+  // Editor): open that project's full form in Projects Intake, like the website.
+  const openIntake = useCallback(
+    (hash: string) => {
+      if (!cfg.intake) return;
+      const to = `${cfg.intake}${hash || ''}`;
+      if (intakeLoaded.current) {
+        if (hash) intakeRef.current?.navigate(to);
+      } else {
+        intakeLoaded.current = true;
+        setIntakePath(to);
+      }
+      open('intake');
+    },
+    [cfg.intake, open],
+  );
 
   const goShell = useCallback((label: string) => {
     setSection('shell');
@@ -109,14 +130,19 @@ function Panel({ kind, PanelWebView }: { kind: PanelKind; PanelWebView: typeof P
       if (own) {
         // The panel itself opened the Map Editor / Intake (e.g. a dashboard
         // shortcut): show the full-screen one and put the panel back where it was.
-        open(own);
+        if (own === 'intake') {
+          // A new "Edit all details" request carries a fresh address (it ends in a timestamp).
+          const hash = s.intake && s.intake !== lastIntakeHash.current ? s.intake : '';
+          if (hash) lastIntakeHash.current = hash;
+          openIntake(hash);
+        } else open(own);
         const back = lastShellTab.current || s.tabs.find((t) => !cfg.own[t.label])?.label;
         if (back) shellRef.current?.go(back);
         return;
       }
       if (s.active && !s.menu.includes(s.active)) lastShellTab.current = s.active;
     },
-    [cfg.own, open],
+    [cfg.own, open, openIntake],
   );
 
   const signingOut = useRef(false);
@@ -131,6 +157,7 @@ function Panel({ kind, PanelWebView }: { kind: PanelKind; PanelWebView: typeof P
   }, [refresh, signOut, toast]);
 
   const openMap = useCallback((pin?: string) => router.push(pin ? { pathname: '/live-map', params: { pin } } : '/live-map'), [router]);
+  const openProject = useCallback((slug: string) => router.push({ pathname: '/project/[slug]', params: { slug } }), [router]);
 
   // ---- bottom bar --------------------------------------------------------
   const tabs: BarItem[] = useMemo(() => (shell?.tabs || []).map((t) => ({ label: t.label, badge: t.badge || undefined })), [shell]);
@@ -143,7 +170,8 @@ function Panel({ kind, PanelWebView }: { kind: PanelKind; PanelWebView: typeof P
   const press = (label: string) => {
     setMoreOpen(false);
     const own = cfg.own[label];
-    if (own) open(own);
+    if (own === 'intake') openIntake('');
+    else if (own) open(own);
     else goShell(label);
   };
 
@@ -182,18 +210,18 @@ function Panel({ kind, PanelWebView }: { kind: PanelKind; PanelWebView: typeof P
       <OfflineBanner />
       <View style={styles.body}>
         <View style={hidden('shell')}>
-          <PanelWebView ref={shellRef} path={cfg.shell} mode="shell" token={token} email={email} onShell={onShell} onSignedOut={onSignedOut} onOpenMap={openMap} />
+          <PanelWebView ref={shellRef} path={cfg.shell} mode="shell" token={token} email={email} onShell={onShell} onSignedOut={onSignedOut} onOpenMap={openMap} onOpenIntake={cfg.intake ? openIntake : undefined} onOpenProject={openProject} />
         </View>
         {loaded.includes('editor') ? (
           <View style={hidden('editor')}>
             <Header title="Map Editor" onReload={() => editorRef.current?.reload()} />
-            <PanelWebView ref={editorRef} path={cfg.editor} mode="frame" token={token} email={email} onSignedOut={onSignedOut} onOpenMap={openMap} />
+            <PanelWebView ref={editorRef} path={cfg.editor} mode="frame" token={token} email={email} onSignedOut={onSignedOut} onOpenMap={openMap} onOpenIntake={cfg.intake ? openIntake : undefined} onOpenProject={openProject} />
           </View>
         ) : null}
         {cfg.intake && loaded.includes('intake') ? (
           <View style={hidden('intake')}>
             <Header title="Projects Intake" onReload={() => intakeRef.current?.reload()} />
-            <PanelWebView ref={intakeRef} path={cfg.intake} mode="frame" token={token} email={email} onSignedOut={onSignedOut} onOpenMap={openMap} />
+            <PanelWebView ref={intakeRef} path={intakePath} mode="frame" token={token} email={email} onSignedOut={onSignedOut} onOpenMap={openMap} onOpenIntake={cfg.intake ? openIntake : undefined} onOpenProject={openProject} />
           </View>
         ) : null}
         {section === 'profile' ? (

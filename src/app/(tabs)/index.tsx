@@ -1,8 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
-import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
+import { Redirect, useIsFocused, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType, type Ref } from 'react';
-import { FlatList, Keyboard, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, FlatList, Keyboard, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { InfoSheet } from '@/components/map/InfoSheet';
 import { MapGate } from '@/components/map/MapGate';
@@ -15,6 +15,7 @@ import { ErrorState, LoadingState } from '@/components/ui/States';
 import { OfflineBanner } from '@/components/OfflineBanner';
 import { BUILT_IN_INFRA } from '@/constants/infra';
 import { colors, fonts, radius, shadow } from '@/constants/theme';
+import { withTimeout } from '@/lib/async';
 import { boundsOf, haversineKm } from '@/lib/geo';
 import { buildSuggestions, interpretQuery, matchSuggestions, MUNDHWA, pinsInArea, type Suggestion } from '@/lib/search';
 import { useMapData, usePins } from '@/hooks/usePublicData';
@@ -35,6 +36,7 @@ const LiveMap: LiveMapComponent | null = nativeMapAvailable
   : null;
 
 const NEAR_ME_KM = 6;
+const LOCATION_TIMEOUT_MS = 15_000;
 
 export default function MapScreen() {
   const { status, user, signOut } = useAuth();
@@ -51,6 +53,7 @@ export default function MapScreen() {
 export function LiveMapScreen({ onBack }: { onBack?: () => void }) {
   const router = useRouter();
   const params = useLocalSearchParams<{ pin?: string }>();
+  const focused = useIsFocused();
   const toast = useToast();
   const { user } = useAuth();
   const gate = useGuestGate();
@@ -116,25 +119,40 @@ export function LiveMapScreen({ onBack }: { onBack?: () => void }) {
     [allPins, pulse, toast],
   );
 
+  const locatingRef = useRef(false);
   const locate = useCallback(
     async (opts: { silent: boolean; ask: boolean }) => {
+      if (locatingRef.current) return; // "Near me" tapped again while a fix is in progress
+      locatingRef.current = true;
       try {
         let perm = await Location.getForegroundPermissionsAsync();
         if (perm.status !== 'granted' && opts.ask && perm.canAskAgain) perm = await Location.requestForegroundPermissionsAsync();
         if (perm.status !== 'granted') {
-          if (!opts.silent) toast('📍 Location unavailable — showing full map');
+          if (!opts.silent) {
+            if (!perm.canAskAgain) {
+              // Permanently denied: the system dialog can't be shown again, only Settings can change it.
+              Alert.alert('Location is off for Mappingg', 'To see projects near you, allow location access for Mappingg in your phone’s settings.', [
+                { text: 'Not now', style: 'cancel' },
+                { text: 'Open settings', onPress: () => void Linking.openSettings().catch(() => undefined) },
+              ]);
+            } else {
+              toast('📍 Location unavailable — showing full map');
+            }
+          }
           fitFullMap();
           return;
         }
         setLocating(true);
         const pos =
           (await Location.getLastKnownPositionAsync({ maxAge: 120_000 })) ||
-          (await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }));
+          // A GPS fix can wait for a very long time indoors or with location services off.
+          (await withTimeout(Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }), LOCATION_TIMEOUT_MS));
         showNearMe(pos.coords.latitude, pos.coords.longitude);
       } catch {
         if (!opts.silent) toast('📍 Location unavailable — showing full map');
         fitFullMap();
       } finally {
+        locatingRef.current = false;
         setLocating(false);
       }
     },
@@ -248,7 +266,8 @@ export function LiveMapScreen({ onBack }: { onBack?: () => void }) {
   const buyer = isBuyer(user);
   const agent = isAgent(user);
 
-  if (pinsQ.isPending) return <LoadingState label="Loading projects…" />;
+  // Same note as the website map while the first load has failed and is being retried.
+  if (pinsQ.isPending) return <LoadingState label={pinsQ.failureCount > 0 ? 'Couldn’t load the projects. Retrying…' : 'Loading projects…'} />;
   if (pinsQ.isError && !pinsQ.data) return <ErrorState error={pinsQ.error} onRetry={() => void pinsQ.refetch()} />;
 
   if (!LiveMap || mapFailed) {
@@ -273,6 +292,7 @@ export function LiveMapScreen({ onBack }: { onBack?: () => void }) {
         selectedId={selected?.id ?? null}
         pulseId={pulseId}
         me={me}
+        animate={focused}
         onPinPress={(p) => openPin(p, false)}
         onInfraPress={(item) => {
           setSelected(null);

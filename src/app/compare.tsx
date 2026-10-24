@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { openUrl } from '@/lib/openLink';
 import { Logo, StatusBadge } from '@/components/ProjectBits';
 import { AppText } from '@/components/ui/AppText';
 import { Button } from '@/components/ui/Button';
@@ -8,7 +9,7 @@ import { Screen } from '@/components/ui/Screen';
 import { EmptyState, ErrorState, LoadingState } from '@/components/ui/States';
 import { mapStatusLabel } from '@/constants/status';
 import { colors, fonts, radius } from '@/constants/theme';
-import { isFieldOn } from '@/lib/fieldVisibility';
+import { isFieldOn, isPublicCustomField } from '@/lib/fieldVisibility';
 import { youtubeId, youtubeWatchUrl } from '@/lib/youtube';
 import { usePins } from '@/hooks/usePublicData';
 import { useProjectActions } from '@/hooks/useProjectActions';
@@ -25,7 +26,7 @@ const ROWS: { label: string; field?: VisibilityField; value(p: Pin): string }[] 
   { label: 'Developer', field: 'developer', value: (p) => p.developer },
   { label: 'Location', field: 'location', value: (p) => p.location },
   { label: 'Property Type', field: 'type', value: (p) => p.type },
-  { label: 'MahaRERA No.', field: 'rera', value: (p) => p.reraNumber },
+  { label: 'RERA No.', field: 'rera', value: (p) => p.reraNumber },
   { label: 'Configuration', field: 'configuration', value: (p) => p.configuration },
   { label: 'Carpet Area', field: 'configuration', value: (p) => p.sqft },
   { label: 'Starting Price', field: 'price', value: (p) => p.price },
@@ -55,7 +56,7 @@ export default function CompareScreen() {
 
   const cell = (p: Pin, field: VisibilityField | undefined, v: string) => (field && !isFieldOn(p, field)) || !v ? '—' : v;
   const rows = ROWS.filter((r) => list.some((p) => cell(p, r.field, r.value(p)) !== '—'));
-  const customLabels = [...new Set(list.flatMap((p) => p.customFields.filter((c) => c.visible !== false && c.label && c.value).map((c) => c.label!)))];
+  const customLabels = [...new Set(list.flatMap((p) => p.customFields.filter((c) => c.visible !== false && c.label && c.value && isPublicCustomField(c)).map((c) => c.label!)))];
 
   return (
     <Screen>
@@ -103,7 +104,7 @@ export default function CompareScreen() {
               <Text style={styles.labelCell}>{label}</Text>
               {list.map((p) => (
                 <Text key={p.id} style={[styles.cell, styles.value]}>
-                  {p.customFields.find((c) => c.visible !== false && c.label === label && c.value)?.value || '—'}
+                  {p.customFields.find((c) => c.visible !== false && c.label === label && c.value && isPublicCustomField(c))?.value || '—'}
                 </Text>
               ))}
             </View>
@@ -113,7 +114,7 @@ export default function CompareScreen() {
             {list.map((p) => {
               const v = youtubeId(p.youtubeVideoUrl);
               return v ? (
-                <Pressable key={p.id} style={styles.cell} onPress={() => void Linking.openURL(youtubeWatchUrl(v))} accessibilityRole="link">
+                <Pressable key={p.id} style={styles.cell} onPress={() => void openUrl(youtubeWatchUrl(v))} accessibilityRole="link">
                   <Text style={styles.link}>▶ Watch video</Text>
                 </Pressable>
               ) : (

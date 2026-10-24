@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useState } from 'react';
-import { FlatList, Linking, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { openUrl } from '@/lib/openLink';
 import { callUrl, whatsappGeneralUrl } from '@/constants/contact';
 import { STATUS_COLOR, STATUS_MAP_LABEL, type PinStatus } from '@/constants/status';
 import { colors, fonts, radius, shadow, TOUCH } from '@/constants/theme';
@@ -130,8 +131,8 @@ export function Legend({ bottom = 20 }: { bottom?: number }) {
 export function SideButtons({ onZoomIn, onZoomOut }: { onZoomIn(): void; onZoomOut(): void }) {
   return (
     <View style={styles.side}>
-      <Round icon="logo-whatsapp" bg={colors.whatsapp} fg="#fff" label="Chat on WhatsApp" onPress={() => Linking.openURL(whatsappGeneralUrl()).catch(() => undefined)} />
-      <Round icon="call" bg={colors.forest} fg="#fff" label="Call us" onPress={() => Linking.openURL(callUrl()).catch(() => undefined)} />
+      <Round icon="logo-whatsapp" bg={colors.whatsapp} fg="#fff" label="Chat on WhatsApp" onPress={() => openUrl(whatsappGeneralUrl())} />
+      <Round icon="call" bg={colors.forest} fg="#fff" label="Call us" onPress={() => openUrl(callUrl())} />
       <View style={styles.zoom}>
         <Pressable onPress={onZoomIn} accessibilityRole="button" accessibilityLabel="Zoom in" style={styles.zoomBtn}>
           <Ionicons name="add" size={22} color={colors.mapInk} />
