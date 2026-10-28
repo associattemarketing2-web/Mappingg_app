@@ -92,6 +92,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     'expo-secure-store',
     'expo-font',
     'expo-image',
+    'expo-video',
     'expo-web-browser',
     'expo-sharing',
     'expo-status-bar',

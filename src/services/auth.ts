@@ -108,19 +108,49 @@ export async function signup(input: SignupInput): Promise<{ token: string; user:
   return { token: requireSession(session), user: toUser(res.user || {}) };
 }
 
-/** Emails a 6-digit code and returns the signed ticket to send back with it. */
-export async function requestOtp(email: string, purpose: 'signup' | 'reset', name?: string): Promise<string> {
-  const res = await apiRequest<{ data?: { sent?: boolean; ticket?: string } }>('/api/auth/otp', {
+/** Who a code is for: sign-up sends both, login a mobile, reset either one. */
+export type OtpIdentity = { email: string; mobile?: string } | { email?: undefined; mobile: string };
+
+/**
+ * Sends a 6-digit code on WhatsApp (same as the website's /api/auth/otp) and
+ * returns the signed ticket to send back with it, plus the masked number it went to.
+ */
+export async function requestOtp(
+  identity: OtpIdentity,
+  purpose: 'signup' | 'reset' | 'login',
+  name?: string,
+): Promise<{ ticket: string; to: string }> {
+  const res = await apiRequest<{ data?: { sent?: boolean; ticket?: string; to?: string } }>('/api/auth/otp', {
     method: 'POST',
-    body: { email: email.trim(), purpose, ...(name ? { name } : {}) },
+    body: {
+      ...(identity.email ? { email: identity.email.trim() } : {}),
+      ...(identity.mobile ? { mobile: identity.mobile } : {}),
+      purpose,
+      ...(name ? { name } : {}),
+    },
   });
   const ticket = res?.data?.ticket;
   if (!ticket) throw new ApiError('parse', 'Could not send the code. Please try again.');
-  return ticket;
+  return { ticket, to: String(res.data?.to || identity.mobile || '') };
 }
 
-export async function resetPassword(input: { email: string; otp: string; ticket: string; password: string }): Promise<void> {
-  await apiRequest('/api/auth/reset-password', { method: 'POST', body: input });
+/** Sign in with the WhatsApp number + code (website's /api/auth/otp-login). */
+export async function otpLogin(mobile: string, otp: string, ticket: string): Promise<{ token: string; user: SessionUser }> {
+  let session: string | null = null;
+  const res = await apiRequest<{ user: RawUser }>('/api/auth/otp-login', {
+    method: 'POST',
+    body: { mobile, otp, ticket },
+    onSession: (t) => {
+      session = t;
+    },
+  });
+  return { token: requireSession(session), user: toUser(res.user || {}) };
+}
+
+/** Returns the account email (the reset may have been requested by mobile number). */
+export async function resetPassword(input: OtpIdentity & { otp: string; ticket: string; password: string }): Promise<string> {
+  const res = await apiRequest<{ data?: { email?: string } }>('/api/auth/reset-password', { method: 'POST', body: input });
+  return String(res?.data?.email || input.email || '');
 }
 
 /** The current session, or null when signed out. The server also renews the cookie here. */

@@ -58,7 +58,8 @@ export default function RootLayout() {
                 <Stack.Screen name="browse/[kind]/[slug]" options={{ title: '' }} />
                 <Stack.Screen name="auth/sign-in" options={{ title: 'Sign in', presentation: 'modal' }} />
                 <Stack.Screen name="auth/sign-up" options={{ title: 'Create account', presentation: 'modal' }} />
-                <Stack.Screen name="auth/forgot-password" options={{ title: 'Reset password', presentation: 'modal' }} />
+                <Stack.Screen name="auth/whatsapp" options={{ title: 'WhatsApp sign in', presentation: 'modal' }} />
+                <Stack.Screen name="auth/forgot-password"options={{ title: 'Reset password', presentation: 'modal' }} />
                 <Stack.Screen name="auth/add-mobile" options={{ title: 'Add mobile number', presentation: 'modal' }} />
                 <Stack.Screen name="compare" options={{ title: 'Compare projects' }} />
                 <Stack.Screen name="favorites" options={{ title: 'My favourites' }} />

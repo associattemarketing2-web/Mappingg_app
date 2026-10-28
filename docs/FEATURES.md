@@ -48,8 +48,9 @@
 | Website | App |
 |---|---|
 | Email + password sign-in | ✅ |
-| Create account (buyer / developer / agent, role fields, email code) | ✅ same fields, options and validation |
-| Forgot password (email code) | ✅ |
+| Create account (buyer / developer / agent, role fields, WhatsApp code) | ✅ same fields, options and validation |
+| Forgot password (email or mobile, WhatsApp code) | ✅ |
+| Sign in with WhatsApp OTP | ✅ same flow (`/api/auth/otp` → `/api/auth/otp-login`) |
 | Continue with Google | ❌ needs a backend change (see `docs/API.md`) |
 | Stay signed in (rolling 60-day session), sign out | ✅ secure storage |
 | Buyer: My profile, compare list | ✅ |

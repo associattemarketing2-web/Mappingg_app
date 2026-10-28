@@ -17,7 +17,8 @@ import { errorMessage } from '@/services/api/errors';
 import { requestOtp, SIGNUP_OPTIONS, type SignupInput, type SignupRole } from '@/services/auth';
 
 // Same fields and rules as the website's "Create account" form: every field is
-// required except a developer's website; the email is verified with a 6-digit code.
+// required except a developer's website; the WhatsApp number is verified with a
+// 6-digit code sent on WhatsApp.
 
 const ROLES = [
   { value: 'buyer', label: 'Buyer / Investor' },
@@ -40,6 +41,7 @@ export default function SignUpScreen() {
   const [dev, setDev] = useState({ company: '', designation: '', activeProjects: '', reraProject: '', website: '' });
   const [agent, setAgent] = useState({ agency: '', reraAgent: '', areas: '' });
   const [ticket, setTicket] = useState('');
+  const [sentTo, setSentTo] = useState('');
   const [otp, setOtp] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState('');
@@ -78,7 +80,9 @@ export default function SignUpScreen() {
     }
     setBusy(true);
     try {
-      setTicket(await requestOtp(email.trim().toLowerCase(), 'signup', name.trim()));
+      const sent = await requestOtp({ email: email.trim().toLowerCase(), mobile: formatPhone(phone.code, phone.number) }, 'signup', name.trim());
+      setSentTo(sent.to);
+      setTicket(sent.ticket);
     } catch (e) {
       setFormError(errorMessage(e));
     } finally {
@@ -88,7 +92,7 @@ export default function SignUpScreen() {
 
   const create = async () => {
     setFormError('');
-    if (!/^\d{6}$/.test(otp.trim())) return setFormError('Enter the 6-digit code from your email.');
+    if (!/^\d{6}$/.test(otp.trim())) return setFormError('Enter the 6-digit code we sent on WhatsApp.');
     const base = { name: name.trim(), email: email.trim().toLowerCase(), mobile: formatPhone(phone.code, phone.number), password, otp: otp.trim(), ticket };
     const input: SignupInput =
       role === 'buyer'
@@ -111,11 +115,11 @@ export default function SignUpScreen() {
   if (ticket) {
     return (
       <Screen>
-        <AppText variant="title">Check your email</AppText>
-        <AppText style={styles.sub}>We sent a 6-digit code to {email.trim()}. Enter it to create your account.</AppText>
+        <AppText variant="title">Check your WhatsApp</AppText>
+        <AppText style={styles.sub}>We sent a 6-digit code on WhatsApp to {sentTo}. Enter it to create your account.</AppText>
         {formError ? <ErrorBox text={formError} /> : null}
-        <TextField label="Email verification code" value={otp} onChangeText={(t) => setOtp(t.replace(/\D/g, '').slice(0, 6))} keyboardType="number-pad" autoComplete="one-time-code" textContentType="oneTimeCode" placeholder="6-digit code" />
-        <Button title="Create account" onPress={() => void create()} loading={busy} />
+        <TextField label="Verification code" value={otp} onChangeText={(t) => setOtp(t.replace(/\D/g, '').slice(0, 6))} keyboardType="number-pad" autoComplete="one-time-code" textContentType="oneTimeCode" placeholder="6-digit code" />
+        <Button title="Verify & create account" onPress={() => void create()} loading={busy} />
         <Button title="Resend code" variant="ghost" onPress={() => void sendCode()} disabled={busy} style={styles.gap} />
         <Button title="Change my details" variant="ghost" onPress={() => setTicket('')} />
       </Screen>
@@ -178,7 +182,7 @@ export default function SignUpScreen() {
       </View>
       {errors.terms ? <Text style={styles.fieldError}>{errors.terms}</Text> : null}
       {formError ? <ErrorBox text={formError} /> : null}
-      <Button title="Continue — verify email" onPress={() => void sendCode()} loading={busy} style={styles.gap} />
+      <Button title="Continue — verify on WhatsApp" onPress={() => void sendCode()} loading={busy} style={styles.gap} />
       <Button title="I already have an account" variant="ghost" onPress={() => router.replace('/auth/sign-in')} style={styles.gap} />
     </Screen>
   );

@@ -72,6 +72,12 @@ export default function SignInScreen() {
       />
       <Button title="Sign in" onPress={() => void submit()} loading={busy} />
       <Button title="Forgot password?" variant="ghost" onPress={() => router.push('/auth/forgot-password')} style={styles.gap} />
+      <View style={styles.or}>
+        <View style={styles.orLine} />
+        <Text style={styles.orText}>or</Text>
+        <View style={styles.orLine} />
+      </View>
+      <Button title="Sign in with WhatsApp OTP" variant="whatsapp" icon="logo-whatsapp" onPress={() => router.replace('/auth/whatsapp')} />
       <View style={styles.divider} />
       <AppText style={styles.center}>New to Mappingg?</AppText>
       <Button title="Create an account" variant="secondary" onPress={() => router.replace('/auth/sign-up')} style={styles.gap} />
@@ -88,6 +94,9 @@ const styles = StyleSheet.create({
   errorText: { color: colors.danger, fontFamily: fonts.medium, fontSize: 14 },
   gap: { marginTop: 8 },
   divider: { height: 1, backgroundColor: colors.line, marginVertical: 18 },
+  or: { flexDirection: 'row', alignItems: 'center', gap: 10, marginVertical: 12 },
+  orLine: { flex: 1, height: 1, backgroundColor: colors.line },
+  orText: { fontFamily: fonts.medium, fontSize: 13, color: colors.muted },
   center: { textAlign: 'center' },
   note: { marginTop: 18, textAlign: 'center' },
 });

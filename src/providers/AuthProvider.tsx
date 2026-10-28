@@ -18,6 +18,8 @@ interface AuthState {
   /** Set when the server ended the session (expired / account removed). */
   sessionEnded: boolean;
   signIn(email: string, password: string): Promise<SessionUser>;
+  /** Sign in with a WhatsApp number and the 6-digit code sent to it. */
+  signInWithOtp(mobile: string, otp: string, ticket: string): Promise<SessionUser>;
   signUp(input: auth.SignupInput): Promise<SessionUser>;
   signOut(): Promise<void>;
   /** Re-reads the account from the server (and renews the session). */
@@ -144,9 +146,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => sub.remove();
   }, [dropSession, refresh]);
 
-  const signIn = useCallback(
-    async (email: string, password: string) => {
-      const { token, user: u } = await auth.login(email, password);
+  const startSession = useCallback(
+    async ({ token, user: u }: { token: string; user: SessionUser }) => {
       tokenRef.current = token;
       await store.saveToken(token);
       setSessionEnded(false);
@@ -159,6 +160,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return full;
     },
     [queryClient, setUser],
+  );
+
+  const signIn = useCallback(
+    async (email: string, password: string) => startSession(await auth.login(email, password)),
+    [startSession],
+  );
+
+  const signInWithOtp = useCallback(
+    async (mobile: string, otp: string, ticket: string) => startSession(await auth.otpLogin(mobile, otp, ticket)),
+    [startSession],
   );
 
   const signUp = useCallback(
@@ -188,8 +199,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const sessionToken = useCallback(() => tokenRef.current, []);
 
   const value = useMemo<AuthState>(
-    () => ({ status, user, offline, sessionEnded, signIn, signUp, signOut, refresh, setUser, sessionToken }),
-    [status, user, offline, sessionEnded, signIn, signUp, signOut, refresh, setUser, sessionToken],
+    () => ({ status, user, offline, sessionEnded, signIn, signInWithOtp, signUp, signOut, refresh, setUser, sessionToken }),
+    [status, user, offline, sessionEnded, signIn, signInWithOtp, signUp, signOut, refresh, setUser, sessionToken],
   );
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
