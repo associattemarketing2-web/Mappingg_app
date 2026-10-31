@@ -3,6 +3,7 @@ import {
   GeoJSONSource,
   Images,
   Layer,
+  LogManager,
   Map as MapLibreMap,
   Marker,
   RasterSource,
@@ -68,6 +69,17 @@ try {
 } catch {
   /* older native build without the transform module: tiles still load */
 }
+
+// A tile that times out or is cancelled (the user panned away before it
+// arrived) is normal on a phone network: MapLibre retries it on its own.
+// The library only downgrades iOS's "Canceled" wording, so Android's
+// "stream was reset: CANCEL" and tile timeouts would otherwise show the red
+// error screen in development. Keep every other MapLibre log as it was.
+const TILE_NETWORK_NOISE = /timeout|timed out|cancel|stream was reset|connection|unable to resolve host|network/i;
+LogManager.onLog(({ tag, message }) => {
+  const tileFailure = tag === 'Mbgl-HttpRequest' || (tag === 'Mbgl' && message.includes('Failed to load tile'));
+  return tileFailure && TILE_NETWORK_NOISE.test(message);
+});
 
 const START = { lat: 18.5215, lng: 73.914, zoom: 14.5 };
 const PIN_SCALE: Record<Pin['size'], number> = { small: 0.78, medium: 1, large: 1.35 };
