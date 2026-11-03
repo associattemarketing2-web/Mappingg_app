@@ -56,7 +56,7 @@ export default function DeleteAccountScreen() {
   const sendRequestInstead = async () => {
     try {
       await requestAccountDeletion(user);
-      finish('Request received', 'We will delete your account and personal data within 7 days and confirm by email. You have been signed out.');
+      finish('Request received', 'We will delete your account and personal data within 30 days and confirm by email. You have been signed out.');
     } catch {
       const body = encodeURIComponent(`Please delete my Mappingg account and personal data.\nEmail: ${user.email}\nAccount ID: ${user.id}`);
       Alert.alert('Could not send the request', `Please email us at ${EMAIL} and we will delete your account.`, [
@@ -105,7 +105,8 @@ export default function DeleteAccountScreen() {
       </AppText>
       <View style={styles.note}>
         <Text style={styles.noteText}>
-          Enquiries you already sent to project teams are business records and may be kept as described in our Privacy Policy.
+          Records of the projects you enquired about are kept for statistics, with your name, email, phone number and messages removed.
+          Projects a developer added stay on the map.
         </Text>
       </View>
       {error ? (

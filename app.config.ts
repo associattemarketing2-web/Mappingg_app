@@ -26,6 +26,24 @@ if (variant !== 'development' && apiBaseUrl && !apiBaseUrl.startsWith('https://'
 }
 const allowCleartext = variant === 'development' && apiBaseUrl.startsWith('http://');
 
+// Store builds must load satellite imagery from a licensed provider, not Esri's
+// public endpoint (see src/constants/mapTiles.ts). Set the provider and its key
+// as EAS environment variables for "production". ALLOW_UNLICENSED_SATELLITE=1
+// skips this check for a one-off build; don't ship such a build to the store.
+if (variant === 'production' && process.env.ALLOW_UNLICENSED_SATELLITE !== '1') {
+  const sat = (process.env.EXPO_PUBLIC_MAP_SATELLITE_TILES || '').trim().toLowerCase();
+  const keyFor: Record<string, string | undefined> = {
+    arcgis: process.env.EXPO_PUBLIC_ARCGIS_BASEMAP_KEY,
+    maptiler: process.env.EXPO_PUBLIC_MAPTILER_KEY,
+  };
+  if (!(sat in keyFor) || !(keyFor[sat] || '').trim()) {
+    throw new Error(
+      'Production builds need licensed satellite tiles: set EXPO_PUBLIC_MAP_SATELLITE_TILES to "arcgis" (with ' +
+        'EXPO_PUBLIC_ARCGIS_BASEMAP_KEY) or "maptiler" (with EXPO_PUBLIC_MAPTILER_KEY). See docs/BUILD.md → Map tiles.',
+    );
+  }
+}
+
 const IDS: Record<Variant, { name: string; androidPackage: string; iosBundle: string }> = {
   development: { name: 'Mappingg (Dev)', androidPackage: 'com.mappingg.app.dev', iosBundle: 'com.mappingg.app.dev' },
   preview: { name: 'Mappingg (Preview)', androidPackage: 'com.mappingg.app.preview', iosBundle: 'com.mappingg.app.preview' },
@@ -37,8 +55,8 @@ const ids = IDS[variant];
 // once; because this config is dynamic, EAS can't write it here itself — paste it
 // between the quotes below (docs/BUILD.md). It must be in this file, not only in a
 // local environment variable, because the EAS build server reads this file too.
-const EAS_PROJECT_ID_FROM_INIT = '59d3c446-47b1-4e3b-8c5a-8b055051d277'; // @mappingg/mappingg
-const EAS_OWNER = 'mappingg';
+const EAS_PROJECT_ID_FROM_INIT = '0f37ac60-4210-47d5-8a41-4a4b4e1e5972'; // @mapping/mappingg
+const EAS_OWNER = 'mapping';
 const EAS_PROJECT_ID = (EAS_PROJECT_ID_FROM_INIT || process.env.EAS_PROJECT_ID || '').trim();
 
 const LOCATION_REASON = 'Mappingg uses your location to show real estate projects near you on the map.';

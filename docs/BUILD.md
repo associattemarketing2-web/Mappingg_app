@@ -85,6 +85,30 @@ Install it once, then `npx expo start` and open the app — JavaScript changes
 load from your PC without rebuilding. Rebuild only after adding/upgrading a
 native package or changing `app.config.ts` plugins/permissions.
 
+## Map tiles (needed before a production build)
+
+Production builds stop with an error unless satellite imagery comes from a
+licensed provider (check in `app.config.ts`). Streets stay on OpenStreetMap.
+
+ArcGIS Location Platform (free up to 2M basemap tiles a month):
+
+1. Sign up at https://location.arcgis.com, create an **API key** with only the
+   *Basemaps* privilege, give it an expiry date, and turn on pay-as-you-go if
+   you expect more than the free tier (otherwise tiles stop at the limit).
+2. Save it in EAS (it ships inside the app, like every `EXPO_PUBLIC_` value,
+   so the key's restrictions are what protect it):
+
+```powershell
+npx eas-cli@latest env:set --environment production --name EXPO_PUBLIC_MAP_SATELLITE_TILES --value arcgis --visibility plaintext
+npx eas-cli@latest env:set --environment production --name EXPO_PUBLIC_ARCGIS_BASEMAP_KEY --value <your key> --visibility plaintext
+```
+
+Add the same two to `--environment preview` to test them in a tester APK first.
+MapTiler works the same way: `EXPO_PUBLIC_MAP_SATELLITE_TILES=maptiler` and
+`EXPO_PUBLIC_MAPTILER_KEY` (set "Allowed user-agent" to `Mappingg/` and a
+spending limit in MapTiler Cloud). To make a one-off production build without
+a licence (never for the store), set `ALLOW_UNLICENSED_SATELLITE=1`.
+
 ## Production build for Google Play
 
 ```powershell

@@ -1,7 +1,13 @@
 # Account deletion — app flow and the website change it needs
 
-**Status:** the app side is built. The website route below is a **proposal awaiting approval**.
-It has *not* been added to the `mappingg` website, and no live data was touched.
+**Status (2 Nov 2026):** built on both sides. The website now has `POST /api/my/account/delete`
+(`app/api/my/account/delete/route.ts`, logic in `lib/account-deletion.ts`) and the public page
+`https://www.mappingg.com/delete-account`. It goes live when the website is deployed.
+
+Decisions taken by the owner: no recycle-bin copy (permanent delete); enquiries and the buyer sign-up
+lead are kept but anonymised; a developer's projects stay on the map, unlinked; activity log entries
+are anonymised; requests without a password are completed within 30 days.
+The proposal below is kept for history; the shipped code differs (anonymisation, project unlinking).
 
 ## Why
 
