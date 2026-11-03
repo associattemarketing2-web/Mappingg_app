@@ -30,7 +30,10 @@ const allowCleartext = variant === 'development' && apiBaseUrl.startsWith('http:
 // public endpoint (see src/constants/mapTiles.ts). Set the provider and its key
 // as EAS environment variables for "production". ALLOW_UNLICENSED_SATELLITE=1
 // skips this check for a one-off build; don't ship such a build to the store.
-if (variant === 'production' && process.env.ALLOW_UNLICENSED_SATELLITE !== '1') {
+// Checked only on the EAS build server (EAS_BUILD=true): that is where the store
+// build is made and where the EAS variables are loaded. EAS CLI also reads this
+// file on your PC before uploading, without those variables.
+if (variant === 'production' && process.env.EAS_BUILD === 'true' && process.env.ALLOW_UNLICENSED_SATELLITE !== '1') {
   const sat = (process.env.EXPO_PUBLIC_MAP_SATELLITE_TILES || '').trim().toLowerCase();
   const keyFor: Record<string, string | undefined> = {
     arcgis: process.env.EXPO_PUBLIC_ARCGIS_BASEMAP_KEY,
