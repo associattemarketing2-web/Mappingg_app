@@ -1,4 +1,4 @@
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { AppText } from '@/components/ui/AppText';
@@ -9,16 +9,24 @@ import { TextField } from '@/components/ui/TextField';
 import { colors, fonts, radius } from '@/constants/theme';
 import { DEFAULT_CODE, formatPhone, isValidNumber, PHONE_ERROR } from '@/lib/phone';
 import { panelOf, useAuth } from '@/providers/AuthProvider';
+import { useToast } from '@/providers/ToastProvider';
 import { errorMessage } from '@/services/api/errors';
 import { requestOtp } from '@/services/auth';
 
-// "Sign in with WhatsApp OTP" — same as the website's sign-in modal: the
-// WhatsApp number on the account gets a 6-digit code (/api/auth/otp, purpose
-// 'login'), then /api/auth/otp-login signs in with it.
+// WhatsApp code screens — the same two flows as the website's sign-in modal:
+//  - "Sign in with WhatsApp OTP" (default): the number on an existing account
+//    gets a code (/api/auth/otp, purpose 'login'), then /api/auth/otp-login.
+//  - "Create account with WhatsApp OTP" (?mode=create): just a number
+//    (purpose 'quick'), then /api/auth/otp-quick, which signs in if an account
+//    has the number or creates a buyer account. Name, email and what they're
+//    looking for are asked later on the live map (PrefAsk).
 
 export default function WhatsAppSignInScreen() {
   const router = useRouter();
-  const { signInWithOtp } = useAuth();
+  const toast = useToast();
+  const { mode } = useLocalSearchParams<{ mode?: string }>();
+  const create = mode === 'create';
+  const { signInWithOtp, quickWithOtp } = useAuth();
   const [phone, setPhone] = useState({ code: DEFAULT_CODE, number: '' });
   const [ticket, setTicket] = useState('');
   const [mobile, setMobile] = useState('');
@@ -34,7 +42,7 @@ export default function WhatsAppSignInScreen() {
     const m = formatPhone(phone.code, phone.number);
     setBusy(true);
     try {
-      const sent = await requestOtp({ mobile: m }, 'login');
+      const sent = await requestOtp({ mobile: m }, create ? 'quick' : 'login');
       setMobile(m);
       setSentTo(sent.to);
       setTicket(sent.ticket);
@@ -51,7 +59,8 @@ export default function WhatsAppSignInScreen() {
     if (!/^\d{6}$/.test(otp)) return setError('Enter the 6-digit code we sent on WhatsApp.');
     setBusy(true);
     try {
-      const user = await signInWithOtp(mobile, otp, ticket);
+      const user = create ? await quickWithOtp(mobile, otp, ticket) : await signInWithOtp(mobile, otp, ticket);
+      if (create) toast('created' in user && user.created ? 'Welcome to Mappingg! Your account is ready.' : 'Welcome back — you are signed in.');
       if (user.needsMobile) router.replace('/auth/add-mobile');
       else {
         if (router.canDismiss()) router.dismissAll();
@@ -66,8 +75,12 @@ export default function WhatsAppSignInScreen() {
 
   return (
     <Screen>
-      <AppText variant="title">Sign in with WhatsApp</AppText>
-      <AppText style={styles.sub}>Enter the WhatsApp number on your account — we’ll send you a 6-digit code to sign in.</AppText>
+      <AppText variant="title">{create ? 'Create account with WhatsApp' : 'Sign in with WhatsApp'}</AppText>
+      <AppText style={styles.sub}>
+        {create
+          ? 'Just your WhatsApp number — we’ll send you a 6-digit code. Already have an account with this number? You’ll simply be signed in.'
+          : 'Enter the WhatsApp number on your account — we’ll send you a 6-digit code to sign in.'}
+      </AppText>
       {error ? (
         <View style={styles.error} accessibilityRole="alert">
           <Text style={styles.errorText}>{error}</Text>
@@ -99,13 +112,20 @@ export default function WhatsAppSignInScreen() {
             returnKeyType="go"
             onSubmitEditing={() => void verify()}
           />
-          <Button title="Verify & sign in" onPress={() => void verify()} loading={busy} />
+          <Button title={create ? 'Verify & continue' : 'Verify & sign in'} onPress={() => void verify()} loading={busy} />
           <Button title="Resend code" variant="ghost" onPress={() => void send()} disabled={busy} style={styles.gap} />
         </>
       ) : (
         <Button title="Send code on WhatsApp" variant="whatsapp" icon="logo-whatsapp" onPress={() => void send()} loading={busy} />
       )}
-      <Button title="Sign in with password" variant="ghost" icon="arrow-back" onPress={() => router.replace('/auth/sign-in')} style={styles.gap} />
+      {create ? (
+        <>
+          <Button title="Create account with email instead" variant="ghost" icon="mail-outline" onPress={() => router.replace('/auth/sign-up')} style={styles.gap} />
+          <Button title="I already have an account" variant="ghost" icon="arrow-back" onPress={() => router.replace('/auth/sign-in')} />
+        </>
+      ) : (
+        <Button title="Sign in with password" variant="ghost" icon="arrow-back" onPress={() => router.replace('/auth/sign-in')} style={styles.gap} />
+      )}
     </Screen>
   );
 }

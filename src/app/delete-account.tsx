@@ -96,6 +96,39 @@ export default function DeleteAccountScreen() {
     ]);
   };
 
+  // Accounts made with just a WhatsApp code have no email shown and no password:
+  // the deletion goes to the team as a request (the server answers "no_password" too).
+  if (!user.email) {
+    const requestNow = () =>
+      Alert.alert('Delete your account?', 'We will permanently delete your Mappingg account and personal data. It cannot be undone.', [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete account',
+          style: 'destructive',
+          onPress: () => {
+            if (running.current) return;
+            running.current = true;
+            setBusy(true);
+            void sendRequestInstead().finally(() => {
+              running.current = false;
+              setBusy(false);
+            });
+          },
+        },
+      ]);
+    return (
+      <Screen>
+        <AppText variant="title">Delete account</AppText>
+        <AppText style={styles.sub}>
+          This deletes the Mappingg account for {user.mobile || user.name}: your profile, saved compare list and favourites. Your account was made with a
+          WhatsApp code and has no password, so our team deletes it for you within 30 days and confirms on WhatsApp.
+        </AppText>
+        <Button title="Delete my account" variant="danger" icon="trash-outline" onPress={requestNow} loading={busy} />
+        <Button title="Cancel" variant="ghost" onPress={() => router.back()} disabled={busy} />
+      </Screen>
+    );
+  }
+
   return (
     <Screen>
       <AppText variant="title">Delete account</AppText>

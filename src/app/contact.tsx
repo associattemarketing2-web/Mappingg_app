@@ -22,13 +22,15 @@ import { CONTACT_CHOICES, CONTACT_PLACEHOLDER, CONTACT_TOPICS, sendContact } fro
 
 export default function ContactScreen() {
   const router = useRouter();
-  const { project } = useLocalSearchParams<{ project?: string }>();
+  const { project, topic } = useLocalSearchParams<{ project?: string; topic?: string }>();
   const { user } = useAuth();
   const [subject, setSubject] = useState<string>(CONTACT_TOPICS[0].value);
   const [name, setName] = useState(user?.name || '');
   const [email, setEmail] = useState(user?.email || '');
   const [phone, setPhone] = useState({ code: DEFAULT_CODE, number: '' });
-  const [message, setMessage] = useState(project ? `I'd like details about ${project}.` : '');
+  const [message, setMessage] = useState(
+    project ? (topic === 'site-visit' ? `I'd like to book a site visit to ${project}. Please call me to fix a time.` : `I'd like details about ${project}.`) : '',
+  );
   const [needs, setNeeds] = useState({ city: '', locality: '', budget: '', bhk: '', timeline: '' });
   const [consentCall, setConsentCall] = useState(false);
   const [consentWa, setConsentWa] = useState(false);

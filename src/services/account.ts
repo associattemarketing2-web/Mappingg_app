@@ -1,4 +1,4 @@
-import type { BuyerProfile, DeveloperNotification, DeveloperProject, EnquireResult } from '@/types/models';
+import type { BuyerProfile, DeveloperNotification, DeveloperProject, EnquireResult, QuickView, UnitRow } from '@/types/models';
 import { apiRequest } from './api/client';
 import { isApiError } from './api/errors';
 
@@ -7,7 +7,11 @@ import { isApiError } from './api/errors';
 // features that match the account's role.
 
 /** "Enquire now" for a signed-in account: the lead is created from the account on the server. */
-export async function enquire(pinId: string, consent?: { call?: boolean; whatsapp?: boolean }): Promise<EnquireResult> {
+export async function enquire(
+  pinId: string,
+  consent?: { call?: boolean; whatsapp?: boolean },
+  visit?: SiteVisit,
+): Promise<EnquireResult> {
   const res = await apiRequest<{ data: EnquireResult }>('/api/my/enquire', {
     method: 'POST',
     auth: true,
@@ -15,9 +19,78 @@ export async function enquire(pinId: string, consent?: { call?: boolean; whatsap
       pin_id: pinId,
       ...(consent?.call === true ? { consent_call: true } : {}),
       ...(consent?.whatsapp === true ? { consent_whatsapp: true } : {}),
+      // "Book Site Visit": the day (YYYY-MM-DD) and time slot go on the same lead.
+      ...(visit ? { site_visit: true, ...(visit.date ? { visit_date: visit.date } : {}), ...(visit.time ? { visit_time: visit.time } : {}) } : {}),
     },
   });
   return res.data;
+}
+
+export interface SiteVisit {
+  date: string;
+  time: string;
+}
+
+/** The website's "Book Site Visit" time slots (live map, #lead-visit-time). */
+export const SITE_VISIT_SLOTS = ['10:00 AM – 12:00 PM', '12:00 PM – 2:00 PM', '2:00 PM – 4:00 PM', '4:00 PM – 6:00 PM', '6:00 PM – 7:30 PM'] as const;
+
+// ---- project details panel (website: "Know more" → details panel) -------------
+
+/**
+ * Full public details of a project (its pin + Projects Intake record): photos,
+ * land / towers / floors / units, unit-type table, brochure, floor plans,
+ * payment plan, 360° tour. Only real, filled-in values come back.
+ */
+export async function getQuickView(number: number): Promise<QuickView | null> {
+  try {
+    const r = await apiRequest<Partial<QuickView>>('/api/project-quickview', { query: { n: String(number) } });
+    const arr = <T,>(v: unknown): T[] => (Array.isArray(v) ? (v as T[]) : []);
+    const s = (v: unknown) => (typeof v === 'string' ? v : '');
+    return {
+      type: s(r.type),
+      usp: s(r.usp),
+      about: s(r.about),
+      logo: s(r.logo),
+      photos: arr<string>(r.photos).filter((x) => typeof x === 'string' && x),
+      video: s(r.video),
+      brochure: s(r.brochure),
+      floorPlans: arr<string>(r.floorPlans).filter((x) => typeof x === 'string' && x),
+      paymentPlan: s(r.paymentPlan),
+      tour360: s(r.tour360),
+      facts: arr<{ k: string; v: string }>(r.facts).filter((f) => f && f.k && f.v),
+      configs: arr<string>(r.configs).filter(Boolean),
+      units: arr<UnitRow>(r.units).filter((u) => u && u.config),
+      highlights: arr<string>(r.highlights).filter(Boolean),
+      green: s(r.green),
+      rera: s(r.rera),
+    };
+  } catch (e) {
+    if (isApiError(e, 'not_found')) return null;
+    throw e;
+  }
+}
+
+/**
+ * A project's brochure (/api/brochure/<pin id>). Everyone may view it; approved
+ * channel partners and staff may also download it (?download=1 — the server checks).
+ */
+export const brochurePath = (pinId: string, download = false) =>
+  `/api/brochure/${encodeURIComponent(pinId)}${download ? '?download=1' : ''}`;
+
+// ---- buyers: "What are you looking for?" (website: prefAsk on the live map) -----
+
+/**
+ * Fills in what a buyer's account is still missing — what they're looking for
+ * and, for accounts made with just a WhatsApp code, name and email. Blank
+ * answers keep what was saved. A new email becomes the sign-in email; the
+ * server then sends a new session cookie, which the API client stores.
+ */
+export async function saveBuyerPrefs(input: { name?: string; email?: string; profile: Record<string, string> }): Promise<void> {
+  await apiRequest('/api/my/profile', {
+    method: 'PATCH',
+    auth: true,
+    body: { name: input.name || '', email: input.email || '', profile: input.profile },
+  });
 }
 
 // ---- buyers: compare list (max 3) and profile ----------------------------------

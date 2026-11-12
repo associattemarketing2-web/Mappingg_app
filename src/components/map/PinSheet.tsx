@@ -1,8 +1,10 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
-import type { ReactNode } from 'react';
+import { useRouter } from 'expo-router';
+import { useEffect, type ReactNode } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { openUrl } from '@/lib/openLink';
+import { usePrefAsk } from '@/providers/PrefAskProvider';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { whatsappProjectUrl } from '@/constants/contact';
 import { mapStatusLabel } from '@/constants/status';
@@ -30,6 +32,10 @@ interface Props {
 
 export function PinSheet({ pin, onClose, onEnquire, onShare, onDetails, compare, favorite, enquiring }: Props) {
   const insets = useSafeAreaInsets();
+  const router = useRouter();
+  const prefAsk = usePrefAsk();
+  // A project card opened on the map counts towards the buyer's "What are you looking for?" prompt.
+  useEffect(() => prefAsk.noteProject(pin.id), [pin.id, prefAsk]);
   const configValue = [pin.configuration, pin.sqft].filter(Boolean).join(' · ');
   const upcoming = pin.status === 'upcoming';
   const possession = upcoming ? (pin.launchDate ? `Launching: ${pin.launchDate}` : '') : pin.possessionTimeline ? `Possession: ${pin.possessionTimeline}` : '';
@@ -106,12 +112,15 @@ export function PinSheet({ pin, onClose, onEnquire, onShare, onDetails, compare,
 
       <View style={styles.actions}>
         {isFieldOn(pin, 'enquire') ? (
-          <Action icon="mail-unread-outline" label={enquiring ? 'Sending…' : 'Enquire'} primary onPress={() => onEnquire(pin)} disabled={enquiring} />
+          <Action icon="mail-unread-outline" label={enquiring ? 'Sending…' : 'Know more'} primary onPress={() => onEnquire(pin)} disabled={enquiring} />
         ) : null}
         {isFieldOn(pin, 'whatsapp') ? (
           <Action icon="logo-whatsapp" label="WhatsApp" color={colors.whatsapp} onPress={() => openUrl(whatsappProjectUrl(pin.title))} />
         ) : null}
         <Action icon="share-social-outline" label="Share" onPress={() => onShare(pin)} />
+        {pin.hasBrochure ? (
+          <Action icon="document-text-outline" label="Brochure" onPress={() => router.push({ pathname: '/brochure/[id]', params: { id: pin.id, title: pin.title } })} />
+        ) : null}
         {compare ? <Action icon={compare.on ? 'git-compare' : 'git-compare-outline'} label={compare.on ? 'Added' : 'Compare'} active={compare.on} onPress={compare.toggle} /> : null}
         {favorite ? <Action icon={favorite.on ? 'heart' : 'heart-outline'} label={favorite.on ? 'Saved' : 'Favourite'} active={favorite.on} onPress={favorite.toggle} /> : null}
         <Action icon="information-circle-outline" label="Details" onPress={() => onDetails(pin)} />

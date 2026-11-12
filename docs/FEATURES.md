@@ -85,3 +85,17 @@
 | Dashboard: click a day in “Projects created day by day” | ✅ website panel (WebView); its “Project page” links open the app’s project screen |
 | Developer intake, scraped data, admin fixes, login role default | ✅ automatic — the panels are the website’s own pages, and auth is server-side |
 | SEO-only changes (pagination, page titles, crawler text, blog, landing copy) | ❌ not applicable to the app |
+
+## Website changes of 23 Oct – 5 Nov 2026, synced on 11 Nov 2026
+
+| Website change | App |
+|---|---|
+| Sign-up no longer asks buyers what they're looking for (name, WhatsApp, email, password only) | ✅ same form (`src/app/auth/sign-up.tsx`); developers/agents unchanged |
+| “Create account with WhatsApp OTP” — just a number + code (`/api/auth/otp` purpose `quick` → `/api/auth/otp-quick`); signs in if the number already has an account | ✅ `auth/whatsapp?mode=create`, button at the top of Create account (buyers) |
+| “What are you looking for?” popup after 3 projects opened or a site visit; asks name/email for WhatsApp-code accounts (`PATCH /api/my/profile`); Skip = 1 week | ✅ `src/providers/PrefAskProvider.tsx` (pin card + project page count as opens) |
+| Map card “Enquire now” renamed “Know more” | ✅ pin card |
+| Project details panel (`/api/project-quickview`): photo gallery, land / towers / floors / units (“On request”), green certification, configuration · carpet area · price table (row → WhatsApp), Explore more (payment plan, floor plans, brochure, 360° tour; missing → ask on WhatsApp), Copy link | ✅ project page |
+| “Book Site Visit” — day (today … 60 days) + time slot saved on the lead (`/api/my/enquire` `site_visit`) | ✅ `src/app/site-visit.tsx`; guests → contact form with the project filled in |
+| Brochure viewer (`/api/brochure/<id>`, pdf.js, view-only; Download for approved channel partners and staff) | ✅ `src/app/brochure/[id].tsx`; pins carry `has_brochure_file` |
+| Accounts with only a WhatsApp code have no email / password | ✅ Account shows the mobile; Delete account sends a deletion request (server answers `no_password`) |
+| Home page hero / blog / SEO pages, admin panels (WhatsApp bulk send, lead sources, grouped tabs) | ❌ marketing pages not in the app · ✅ admin panels automatic (website pages in the panel WebView) |

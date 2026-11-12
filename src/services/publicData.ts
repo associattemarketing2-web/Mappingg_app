@@ -44,7 +44,7 @@ async function dbSelect<T>(op: DbOp, signal?: AbortSignal): Promise<T> {
 
 // The live map's own column list (PIN_LIGHT_COLS), plus created_at for listings.
 const PIN_COLUMNS =
-  'id,number,lat,lng,title,type,status,price,description,updated_at,created_at,configuration,sqft,possession_timeline,launch_date,whats_available,highlighted,size,developer,location,key_usp,field_visibility,custom_fields,youtube_video_url,brochure_width,brochure_height,rera_number,image,brochure_image';
+  'id,number,lat,lng,title,type,status,price,description,updated_at,created_at,configuration,sqft,possession_timeline,launch_date,whats_available,highlighted,size,developer,location,key_usp,field_visibility,custom_fields,youtube_video_url,brochure_width,brochure_height,rera_number,image,brochure_image,brochure_url';
 
 const str = (v: unknown): string => (v == null ? '' : typeof v === 'string' ? v.trim() : String(v));
 const num = (v: unknown): number | null => {
@@ -110,6 +110,8 @@ export function normalizePin(r: Row): Pin | null {
     reraNumber: str(r.rera_number),
     image: mediaUrl(r.image),
     brochureImage: mediaUrl(r.brochure_image),
+    // The server sends only a flag for brochure_url; the file is served by /api/brochure/<id>.
+    hasBrochure: r.has_brochure_file === true,
     updatedAt: str(r.updated_at),
     createdAt: str(r.created_at),
     // From the stored values: the website's URLs, whatever the display form.

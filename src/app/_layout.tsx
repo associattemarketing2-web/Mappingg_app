@@ -9,6 +9,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { colors, fonts } from '@/constants/theme';
 import { AuthProvider } from '@/providers/AuthProvider';
 import { GuestGateProvider } from '@/providers/GuestGateProvider';
+import { PrefAskProvider } from '@/providers/PrefAskProvider';
 import { QueryProvider } from '@/providers/QueryProvider';
 import { ToastProvider } from '@/providers/ToastProvider';
 
@@ -39,6 +40,7 @@ export default function RootLayout() {
         <AuthProvider>
           <ToastProvider>
             <GuestGateProvider>
+            <PrefAskProvider>
               <StatusBar style="dark" />
               <Stack
                 screenOptions={{
@@ -58,7 +60,9 @@ export default function RootLayout() {
                 <Stack.Screen name="browse/[kind]/[slug]" options={{ title: '' }} />
                 <Stack.Screen name="auth/sign-in" options={{ title: 'Sign in', presentation: 'modal' }} />
                 <Stack.Screen name="auth/sign-up" options={{ title: 'Create account', presentation: 'modal' }} />
-                <Stack.Screen name="auth/whatsapp" options={{ title: 'WhatsApp sign in', presentation: 'modal' }} />
+                <Stack.Screen name="auth/whatsapp" options={{ title: 'WhatsApp', presentation: 'modal' }} />
+                <Stack.Screen name="brochure/[id]" options={{ title: 'Brochure' }} />
+                <Stack.Screen name="site-visit" options={{ title: 'Book a site visit', presentation: 'modal' }} />
                 <Stack.Screen name="auth/forgot-password"options={{ title: 'Reset password', presentation: 'modal' }} />
                 <Stack.Screen name="auth/add-mobile" options={{ title: 'Add mobile number', presentation: 'modal' }} />
                 <Stack.Screen name="compare" options={{ title: 'Compare projects' }} />
@@ -71,6 +75,7 @@ export default function RootLayout() {
                 <Stack.Screen name="delete-account" options={{ title: 'Delete account', presentation: 'modal' }} />
                 <Stack.Screen name="+not-found" options={{ title: 'Not found' }} />
               </Stack>
+            </PrefAskProvider>
             </GuestGateProvider>
           </ToastProvider>
         </AuthProvider>

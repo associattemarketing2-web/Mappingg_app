@@ -72,7 +72,8 @@ export default function AccountScreen() {
                 {user.name || 'My account'}
               </Text>
               <Text style={styles.email} numberOfLines={1}>
-                {user.email}
+                {/* WhatsApp-code accounts have no email until they add one. */}
+                {user.email || user.mobile}
               </Text>
               <Text style={styles.role}>{ROLE_LABEL[user.role] || user.role}</Text>
             </View>

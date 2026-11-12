@@ -16,9 +16,10 @@ import { useAuth } from '@/providers/AuthProvider';
 import { errorMessage } from '@/services/api/errors';
 import { requestOtp, SIGNUP_OPTIONS, type SignupInput, type SignupRole } from '@/services/auth';
 
-// Same fields and rules as the website's "Create account" form: every field is
-// required except a developer's website; the WhatsApp number is verified with a
-// 6-digit code sent on WhatsApp.
+// Same fields and rules as the website's "Create account" form: buyers give
+// name, WhatsApp, email and password (or use "Create account with WhatsApp
+// OTP"); developers and agents also their company + RERA details (all required
+// except a developer's website). The WhatsApp number is verified with a code.
 
 const ROLES = [
   { value: 'buyer', label: 'Buyer / Investor' },
@@ -26,7 +27,6 @@ const ROLES = [
   { value: 'agent', label: 'Agent / Channel Partner' },
 ];
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const pills = (xs: readonly string[]) => xs.map((x) => ({ value: x, label: x }));
 
 export default function SignUpScreen() {
   const router = useRouter();
@@ -37,7 +37,6 @@ export default function SignUpScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [terms, setTerms] = useState(false);
-  const [buyer, setBuyer] = useState({ area: '', configuration: '', budget: '', timeline: '', purpose: '' });
   const [dev, setDev] = useState({ company: '', designation: '', activeProjects: '', reraProject: '', website: '' });
   const [agent, setAgent] = useState({ agency: '', reraAgent: '', areas: '' });
   const [ticket, setTicket] = useState('');
@@ -53,16 +52,12 @@ export default function SignUpScreen() {
     if (!isValidNumber(phone.number)) e.phone = PHONE_ERROR;
     if (!EMAIL_RE.test(email.trim())) e.email = 'Enter a valid email address.';
     if (password.length < 8) e.password = 'Use at least 8 characters.';
-    if (role === 'buyer') {
-      (Object.keys(buyer) as (keyof typeof buyer)[]).forEach((k) => {
-        if (!buyer[k].trim()) e[k] = 'Required';
-      });
-    } else if (role === 'developer') {
+    if (role === 'developer') {
       if (!dev.company.trim()) e.company = 'Required';
       if (!dev.designation) e.designation = 'Required';
       if (!dev.activeProjects) e.activeProjects = 'Required';
       if (dev.reraProject.trim().length < 4) e.reraProject = 'Enter a MahaRERA project number.';
-    } else {
+    } else if (role === 'agent') {
       if (!agent.agency.trim()) e.agency = 'Required';
       if (agent.reraAgent.trim().length < 4) e.reraAgent = 'Enter your MahaRERA agent number.';
       if (!agent.areas.trim()) e.areas = 'Required';
@@ -96,7 +91,8 @@ export default function SignUpScreen() {
     const base = { name: name.trim(), email: email.trim().toLowerCase(), mobile: formatPhone(phone.code, phone.number), password, otp: otp.trim(), ticket };
     const input: SignupInput =
       role === 'buyer'
-        ? { ...base, role, profile: { ...buyer, area: buyer.area.trim() } }
+        ? // Buyers' preferences are no longer asked here (website, Oct 2026): the live map asks later.
+          { ...base, role, profile: { area: '', configuration: '', budget: '', timeline: '', purpose: '' } }
         : role === 'developer'
           ? { ...base, role, profile: { ...dev, company: dev.company.trim(), reraProject: dev.reraProject.trim(), website: dev.website.trim() } }
           : { ...base, role, profile: { agency: agent.agency.trim(), reraAgent: agent.reraAgent.trim(), areas: agent.areas.trim() } };
@@ -129,25 +125,30 @@ export default function SignUpScreen() {
   return (
     <Screen>
       <AppText variant="title">Create your account</AppText>
-      <AppText style={styles.sub}>Takes less than a minute. All fields are required.</AppText>
       <ChoicePills label="I am a" options={ROLES} value={role} onChange={(v) => setRole(v as SignupRole)} />
+      {role === 'buyer' ? (
+        <View style={styles.quick}>
+          <Button title="Create account with WhatsApp OTP" variant="whatsapp" icon="logo-whatsapp" onPress={() => router.replace({ pathname: '/auth/whatsapp', params: { mode: 'create' } })} />
+          <AppText variant="caption" style={styles.quickNote}>
+            Just your WhatsApp number and a 6-digit code — nothing else to fill in.
+          </AppText>
+          <View style={styles.or}>
+            <View style={styles.orLine} />
+            <Text style={styles.orText}>or sign up with email</Text>
+            <View style={styles.orLine} />
+          </View>
+        </View>
+      ) : null}
+      <AppText style={styles.sub}>
+        {role === 'buyer'
+          ? 'Your name, WhatsApp number, email and a password — we’ll send a 6-digit code on WhatsApp to verify your number.'
+          : 'All fields are needed so we can verify your RERA details.'}
+      </AppText>
       <TextField label="Full name" value={name} onChangeText={setName} autoComplete="name" textContentType="name" error={errors.name} />
       <PhoneField label="WhatsApp number" code={phone.code} number={phone.number} onChange={(code, number) => setPhone({ code, number })} error={errors.phone} />
       <TextField label="Email" value={email} onChangeText={setEmail} autoCapitalize="none" keyboardType="email-address" autoComplete="email" error={errors.email} />
 
-      {role === 'buyer' ? (
-        <View style={styles.group}>
-          <AppText variant="label">Tell us what you’re looking for</AppText>
-          <AppText variant="caption" style={styles.groupSub}>
-            Helps us match you to the right projects
-          </AppText>
-          <TextField label="Preferred area" value={buyer.area} onChangeText={(v) => setBuyer({ ...buyer, area: v })} placeholder="e.g. Mundhwa, Kharadi" error={errors.area} />
-          <SelectField label="Configuration" value={buyer.configuration} options={SIGNUP_OPTIONS.configuration} onChange={(v) => setBuyer({ ...buyer, configuration: v })} error={errors.configuration} />
-          <SelectField label="Budget" value={buyer.budget} options={SIGNUP_OPTIONS.budget} onChange={(v) => setBuyer({ ...buyer, budget: v })} error={errors.budget} />
-          <SelectField label="Planning to buy" value={buyer.timeline} options={SIGNUP_OPTIONS.timeline} onChange={(v) => setBuyer({ ...buyer, timeline: v })} error={errors.timeline} />
-          <ChoicePills label="Buying for" options={pills(SIGNUP_OPTIONS.purpose)} value={buyer.purpose} onChange={(v) => setBuyer({ ...buyer, purpose: v })} error={errors.purpose} />
-        </View>
-      ) : role === 'developer' ? (
+      {role === 'buyer' ? null : role === 'developer' ? (
         <View style={styles.group}>
           <AppText variant="label">Company details</AppText>
           <TextField label="Company / developer name" value={dev.company} onChangeText={(v) => setDev({ ...dev, company: v })} placeholder="e.g. ABC Developers Pvt Ltd" error={errors.company} />
@@ -198,6 +199,11 @@ function ErrorBox({ text }: { text: string }) {
 
 const styles = StyleSheet.create({
   sub: { marginTop: 4, marginBottom: 18 },
+  quick: { marginBottom: 6 },
+  quickNote: { marginTop: 6, textAlign: 'center' },
+  or: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 14 },
+  orLine: { flex: 1, height: 1, backgroundColor: colors.line },
+  orText: { fontFamily: fonts.medium, fontSize: 12, color: colors.muted },
   group: { marginTop: 4, marginBottom: 8, padding: 14, borderRadius: radius.md, backgroundColor: colors.land, borderWidth: 1, borderColor: colors.line },
   groupSub: { marginBottom: 12 },
   verify: { backgroundColor: colors.water50, padding: 12, borderRadius: radius.md, marginBottom: 8 },

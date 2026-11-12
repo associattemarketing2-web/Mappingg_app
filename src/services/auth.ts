@@ -117,7 +117,7 @@ export type OtpIdentity = { email: string; mobile?: string } | { email?: undefin
  */
 export async function requestOtp(
   identity: OtpIdentity,
-  purpose: 'signup' | 'reset' | 'login',
+  purpose: 'signup' | 'reset' | 'login' | 'quick',
   name?: string,
 ): Promise<{ ticket: string; to: string }> {
   const res = await apiRequest<{ data?: { sent?: boolean; ticket?: string; to?: string } }>('/api/auth/otp', {
@@ -145,6 +145,23 @@ export async function otpLogin(mobile: string, otp: string, ticket: string): Pro
     },
   });
   return { token: requireSession(session), user: toUser(res.user || {}) };
+}
+
+/**
+ * "Create account with WhatsApp OTP" (website's /api/auth/otp-quick, code from
+ * purpose 'quick'): signs in when an account already has the number, otherwise
+ * creates a buyer account with just the number. `created` tells which.
+ */
+export async function otpQuick(mobile: string, otp: string, ticket: string): Promise<{ token: string; user: SessionUser; created: boolean }> {
+  let session: string | null = null;
+  const res = await apiRequest<{ user: RawUser; created?: boolean }>('/api/auth/otp-quick', {
+    method: 'POST',
+    body: { mobile, otp, ticket },
+    onSession: (t) => {
+      session = t;
+    },
+  });
+  return { token: requireSession(session), user: toUser(res.user || {}), created: res.created === true };
 }
 
 /** Returns the account email (the reset may have been requested by mobile number). */

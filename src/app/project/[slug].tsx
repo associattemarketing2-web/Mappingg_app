@@ -1,8 +1,12 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
-import { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import * as WebBrowser from 'expo-web-browser';
+import { useEffect, useState } from 'react';
+import { Alert, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { apiUrl } from '@/constants/config';
+import { copyText } from '@/lib/clipboard';
+import { usePrefAsk } from '@/providers/PrefAskProvider';
 import { openUrl } from '@/lib/openLink';
 import { Chip, StatusBadge } from '@/components/ProjectBits';
 import { ProjectCard } from '@/components/ProjectCard';
@@ -10,7 +14,7 @@ import { AppText } from '@/components/ui/AppText';
 import { Button } from '@/components/ui/Button';
 import { Screen } from '@/components/ui/Screen';
 import { EmptyState, ErrorState, LoadingState } from '@/components/ui/States';
-import { callUrl, directionsUrl, whatsappProjectUrl } from '@/constants/contact';
+import { callUrl, directionsUrl, WHATSAPP_NUMBER, whatsappProjectUrl } from '@/constants/contact';
 import { listStatusLabel, mapStatusLabel, STATUS_ROUTES } from '@/constants/status';
 import { colors, fonts, radius, TOUCH } from '@/constants/theme';
 import { cityOf, relatedProjects, typeLabel } from '@/lib/entities';
@@ -22,8 +26,8 @@ import { projectFaqs, projectSummary, publicFacts } from '@/lib/projectMeta';
 import { reraRegistry } from '@/lib/rera';
 import { slugify } from '@/lib/slug';
 import { youtubeId, youtubeThumb, youtubeWatchUrl } from '@/lib/youtube';
-import { findPinBySlug, usePins } from '@/hooks/usePublicData';
-import { useProjectActions } from '@/hooks/useProjectActions';
+import { findPinBySlug, usePins, useQuickView } from '@/hooks/usePublicData';
+import { projectShareUrl, useProjectActions } from '@/hooks/useProjectActions';
 import { useCompare, useFavorites } from '@/hooks/useSavedList';
 import { isAgent, isBuyer, useAuth } from '@/providers/AuthProvider';
 import { useToast } from '@/providers/ToastProvider';
@@ -36,8 +40,18 @@ const fmtDate = (d?: string) => {
   return Number.isNaN(t.getTime()) ? '' : t.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
 };
 
+/** Website's details-panel tiles; a missing figure reads "On request". */
+const FACT_TILES: [string, RegExp][] = [
+  ['Land parcel', /land|acre|parcel/i],
+  ['No. of towers', /tower|wing|building/i],
+  ['No. of floors', /floor|storey|story/i],
+  ['Total units', /unit|flat|apartment/i],
+];
+const abs = (u: string) => (u ? apiUrl(u) : '');
+const askOnWhatsApp = (text: string) => `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(`${text} (Mappingg).`)}`;
+
 export default function ProjectScreen() {
-  const { slug = '', enquiry, via } = useLocalSearchParams<{ slug: string; enquiry?: string; via?: string }>();
+  const { slug = '', enquiry, via, visit } = useLocalSearchParams<{ slug: string; enquiry?: string; via?: string; visit?: string }>();
   const router = useRouter();
   const pinsQ = usePins();
   const pin = findPinBySlug(pinsQ.data, String(slug));
@@ -52,27 +66,106 @@ export default function ProjectScreen() {
       </>
     );
   }
-  return <ProjectBody pin={pin} all={pinsQ.data || []} enquiry={enquiry} via={via} refreshing={pinsQ.isRefetching} onRefresh={() => void pinsQ.refetch()} />;
+  return <ProjectBody pin={pin} all={pinsQ.data || []} enquiry={enquiry} via={via} visit={visit} refreshing={pinsQ.isRefetching} onRefresh={() => void pinsQ.refetch()} />;
 }
 
-function ProjectBody({ pin, all, enquiry, via, refreshing, onRefresh }: { pin: Pin; all: Pin[]; enquiry?: string; via?: string; refreshing: boolean; onRefresh(): void }) {
+function ProjectBody({
+  pin,
+  all,
+  enquiry,
+  via,
+  visit,
+  refreshing,
+  onRefresh,
+}: {
+  pin: Pin;
+  all: Pin[];
+  enquiry?: string;
+  via?: string;
+  visit?: string;
+  refreshing: boolean;
+  onRefresh(): void;
+}) {
   const router = useRouter();
   const toast = useToast();
   const { user, status } = useAuth();
   const { enquireAbout, share, busyId } = useProjectActions();
   const compare = useCompare(toast);
   const favorites = useFavorites(toast);
+  const prefAsk = usePrefAsk();
   const [imgFailed, setImgFailed] = useState(false);
+  const qv = useQuickView(pin.number).data || null;
+  const { width } = useWindowDimensions();
+
+  // Opening a project counts towards the buyer's "What are you looking for?" prompt.
+  useEffect(() => prefAsk.noteProject(pin.id), [pin.id, prefAsk]);
+
+  const photos = (qv?.photos || []).map(abs).filter(Boolean);
+  const vidUrl = pin.youtubeVideoUrl || qv?.video || '';
+  // Project size (land · towers · floors · units): Projects Intake figures, else the pin's custom fields.
+  const pubCustom = visibleCustomFields(pin);
+  const sizeTiles = FACT_TILES.map(([k, re]) => {
+    const fromQv = qv?.facts.find((f) => f.k === k)?.v;
+    const fromPin = pubCustom.find((cf) => cf.label && re.test(cf.label) && cf.value)?.value;
+    return { k, v: fromQv || fromPin || '' };
+  });
+  const hasSize = sizeTiles.some((t) => t.v);
+  const brochureFile = qv?.brochure ? abs(qv.brochure) : '';
+  const explore: { key: string; label: string; icon: keyof typeof Ionicons.glyphMap; onPress(): void }[] = [
+    {
+      key: 'payment',
+      label: 'Payment plan',
+      icon: 'card-outline',
+      onPress: () => void openUrl(qv?.paymentPlan ? abs(qv.paymentPlan) : askOnWhatsApp(`Hi, please share the payment plan of ${pin.title}`)),
+    },
+    {
+      key: 'floor',
+      label: qv?.floorPlans.length && qv.floorPlans.length > 1 ? `Floor plans (${qv.floorPlans.length})` : 'Floor plans',
+      icon: 'grid-outline',
+      onPress: () => {
+        const plans = (qv?.floorPlans || []).map(abs);
+        if (!plans.length) return void openUrl(askOnWhatsApp(`Hi, please share the floor plans of ${pin.title}`));
+        if (plans.length === 1) return void WebBrowser.openBrowserAsync(plans[0]!).catch(() => openUrl(plans[0]!));
+        Alert.alert('Floor plans', undefined, [
+          ...plans.slice(0, 8).map((u, i) => ({ text: `Floor plan ${i + 1}`, onPress: () => void WebBrowser.openBrowserAsync(u).catch(() => openUrl(u)) })),
+          { text: 'Cancel', style: 'cancel' as const },
+        ]);
+      },
+    },
+    {
+      key: 'brochure',
+      label: 'Brochure',
+      icon: 'document-text-outline',
+      onPress: () => {
+        if (pin.hasBrochure) return router.push({ pathname: '/brochure/[id]', params: { id: pin.id, title: pin.title } });
+        if (brochureFile) return void WebBrowser.openBrowserAsync(brochureFile).catch(() => openUrl(brochureFile));
+        void openUrl(askOnWhatsApp(`Hi, please share the brochure of ${pin.title}`));
+      },
+    },
+    {
+      key: 'tour',
+      label: '360° tour',
+      icon: 'cube-outline',
+      onPress: () =>
+        qv?.tour360 ? void WebBrowser.openBrowserAsync(qv.tour360).catch(() => openUrl(qv.tour360)) : void openUrl(askOnWhatsApp(`Hi, please share the 360° tour of ${pin.title}`)),
+    },
+  ];
+
+  const copyLink = async () => {
+    if (await copyText(projectShareUrl(pin))) toast('Link copied');
+  };
 
   const loc = pin.locality;
   const cityKey = cityOf(pin);
   const city = CITY_LABELS[cityKey];
   const sold = pin.status === 'sold';
-  const vid = youtubeId(pin.youtubeVideoUrl);
+  const vid = youtubeId(vidUrl);
   const rera = reraNumbers(pin);
   // The registry that issued the number (MahaRERA, RERA Karnataka, Haryana RERA…), with its website.
   const reg = rera.length ? reraRegistry(rera[0]) : null;
-  const usp = uspPoints(pin);
+  const pinUsp = uspPoints(pin);
+  const usp = pinUsp.length ? pinUsp : qv?.highlights || [];
+  const about = pin.description || qv?.about || '';
   const cover = withWidth(pin.image, 1000);
 
   const facts: [string, string][] = sold
@@ -118,7 +211,15 @@ function ProjectBody({ pin, all, enquiry, via, refreshing, onRefresh }: { pin: P
     <Screen refreshing={refreshing} onRefresh={onRefresh}>
       <Stack.Screen options={{ title: isFieldOn(pin, 'name') ? pin.title : 'Project' }} />
 
-      {enquiry === 'sent' || enquiry === 'already' ? (
+      {enquiry === 'visit' ? (
+        <View style={styles.enqNote} accessibilityRole="alert">
+          <Ionicons name="checkmark-circle" size={22} color={colors.success} />
+          <Text style={styles.enqText}>
+            <Text style={styles.bold}>Site visit booked{visit ? ` — ${visit}` : ''}. </Text>
+            Our team will confirm your visit{via ? ` on WhatsApp (${via})` : ' by email'}.
+          </Text>
+        </View>
+      ) : enquiry === 'sent' || enquiry === 'already' ? (
         <View style={styles.enqNote} accessibilityRole="alert">
           <Ionicons name="checkmark-circle" size={22} color={colors.success} />
           <Text style={styles.enqText}>
@@ -128,7 +229,9 @@ function ProjectBody({ pin, all, enquiry, via, refreshing, onRefresh }: { pin: P
         </View>
       ) : null}
 
-      {cover && !imgFailed ? (
+      {photos.length ? (
+        <Gallery photos={photos} width={width - 32} title={pin.title} />
+      ) : cover && !imgFailed ? (
         <Image source={{ uri: cover }} style={styles.cover} contentFit="contain" onError={() => setImgFailed(true)} accessibilityLabel={`${pin.title}${pin.developer ? ` by ${pin.developer}` : ''}`} />
       ) : null}
 
@@ -160,6 +263,28 @@ function ProjectBody({ pin, all, enquiry, via, refreshing, onRefresh }: { pin: P
               <Text style={styles.factValue}>{v}</Text>
             </View>
           ))}
+        </View>
+      ) : null}
+
+      {hasSize && !sold ? (
+        <View style={styles.sizeRow}>
+          {sizeTiles.map((t) => (
+            <View key={t.k} style={styles.sizeTile}>
+              <Text style={styles.sizeV} numberOfLines={2}>
+                {t.v || 'On request'}
+              </Text>
+              <Text style={styles.sizeK} numberOfLines={1}>
+                {t.k}
+              </Text>
+            </View>
+          ))}
+        </View>
+      ) : null}
+
+      {qv?.green ? (
+        <View style={styles.green}>
+          <Ionicons name="leaf" size={16} color={colors.park} />
+          <Text style={styles.greenText}>{qv.green}</Text>
         </View>
       ) : null}
 
@@ -207,6 +332,17 @@ function ProjectBody({ pin, all, enquiry, via, refreshing, onRefresh }: { pin: P
           <Small icon="share-social" label="Share" onPress={() => void share(pin)} />
         </View>
         <View style={styles.actionRow}>
+          {!sold ? (
+            <Small
+              icon="calendar-outline"
+              label="Book site visit"
+              onPress={() => router.push({ pathname: '/site-visit', params: { pinId: pin.id, slug: pin.slug, title: pin.title } })}
+            />
+          ) : null}
+          <Small icon="link-outline" label="Copy link" onPress={() => void copyLink()} />
+          {pin.hasBrochure ? <Small icon="document-text-outline" label="Brochure" onPress={() => router.push({ pathname: '/brochure/[id]', params: { id: pin.id, title: pin.title } })} /> : null}
+        </View>
+        <View style={styles.actionRow}>
           {hasCoords(pin) ? <Small icon="map" label="See on live map" onPress={() => router.navigate({ pathname: '/', params: { pin: pin.id } })} /> : null}
           {signedIn && isBuyer(user) ? (
             <Small icon={compare.pins.includes(pin.id) ? 'git-compare' : 'git-compare-outline'} label={compare.pins.includes(pin.id) ? 'In compare' : 'Compare'} active={compare.pins.includes(pin.id)} onPress={() => compare.toggle(pin.id)} />
@@ -247,11 +383,45 @@ function ProjectBody({ pin, all, enquiry, via, refreshing, onRefresh }: { pin: P
         </Section>
       ) : null}
 
-      {pin.description ? (
+      {qv?.units.length && !sold ? (
+        <Section title="Configuration · carpet area · price">
+          {qv.units.map((u, i) => (
+            <Pressable
+              key={`${u.config}-${i}`}
+              onPress={() => void openUrl(askOnWhatsApp(`Hi, please share price and availability of ${u.config} in ${pin.title}`))}
+              accessibilityRole="link"
+              accessibilityLabel={`${u.config}, ${u.area || 'area on request'}, ${u.price || 'price on request'}. Ask on WhatsApp`}
+              style={styles.unit}
+            >
+              <Text style={styles.unitCfg}>{u.config}</Text>
+              <Text style={styles.unitArea}>{u.area || '—'}</Text>
+              <Text style={styles.unitPrice}>{u.price || 'On request'}</Text>
+              <Ionicons name="chevron-forward" size={16} color={colors.muted} />
+            </Pressable>
+          ))}
+        </Section>
+      ) : null}
+
+      {about ? (
         <Section title={`About ${pin.title}`}>
           <Text style={styles.body} selectable>
-            {pin.description}
+            {about}
           </Text>
+        </Section>
+      ) : null}
+
+      {!sold ? (
+        <Section title="Explore more">
+          <View style={styles.exploreGrid}>
+            {explore.map((x) => (
+              <Pressable key={x.key} onPress={x.onPress} accessibilityRole="button" accessibilityLabel={x.label} style={({ pressed }) => [styles.explore, pressed && { opacity: 0.8 }]}>
+                <Ionicons name={x.icon} size={22} color={colors.forest} />
+                <Text style={styles.exploreText} numberOfLines={1}>
+                  {x.label}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
         </Section>
       ) : null}
 
@@ -296,6 +466,34 @@ function ProjectBody({ pin, all, enquiry, via, refreshing, onRefresh }: { pin: P
         </Section>
       ) : null}
     </Screen>
+  );
+}
+
+/** Photo gallery (website: big box + "1/N" count): swipe through the project's photos. */
+function Gallery({ photos, width, title }: { photos: string[]; width: number; title: string }) {
+  const [index, setIndex] = useState(0);
+  const w = Math.max(200, width);
+  return (
+    <View style={styles.gallery}>
+      <ScrollView
+        horizontal
+        pagingEnabled
+        showsHorizontalScrollIndicator={false}
+        onMomentumScrollEnd={(e) => setIndex(Math.round(e.nativeEvent.contentOffset.x / w))}
+        accessibilityLabel={`${title} photos`}
+      >
+        {photos.map((u, i) => (
+          <Image key={u} source={{ uri: /[?&]w=\d/.test(u) ? u : withWidth(u, 1000) || u }} style={[styles.galleryImg, { width: w }]} contentFit="cover" accessibilityLabel={`${title} photo ${i + 1} of ${photos.length}`} />
+        ))}
+      </ScrollView>
+      {photos.length > 1 ? (
+        <View style={styles.galleryCount}>
+          <Text style={styles.galleryCountText}>
+            {Math.min(index + 1, photos.length)}/{photos.length}
+          </Text>
+        </View>
+      ) : null}
+    </View>
   );
 }
 
@@ -387,6 +585,23 @@ const styles = StyleSheet.create({
   pills: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   pill: { minHeight: 40, justifyContent: 'center', paddingHorizontal: 14, borderRadius: radius.pill, backgroundColor: colors.forestTint },
   pillText: { fontFamily: fonts.semibold, fontSize: 13, color: colors.forest },
+  gallery: { marginBottom: 16, borderRadius: radius.lg, overflow: 'hidden', backgroundColor: colors.land },
+  galleryImg: { aspectRatio: 16 / 10 },
+  galleryCount: { position: 'absolute', right: 10, bottom: 10, paddingHorizontal: 10, paddingVertical: 4, borderRadius: radius.pill, backgroundColor: 'rgba(0,0,0,0.6)' },
+  galleryCountText: { fontFamily: fonts.semibold, fontSize: 12, color: '#fff' },
+  sizeRow: { flexDirection: 'row', gap: 8, marginTop: 12 },
+  sizeTile: { flex: 1, minWidth: 0, paddingVertical: 10, paddingHorizontal: 6, borderRadius: radius.md, backgroundColor: '#fff', borderWidth: 1, borderColor: colors.line, alignItems: 'center' },
+  sizeV: { fontFamily: fonts.bold, fontSize: 13, color: colors.ink, textAlign: 'center' },
+  sizeK: { marginTop: 2, fontFamily: fonts.medium, fontSize: 11, color: colors.muted },
+  green: { marginTop: 12, alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 6, borderRadius: radius.pill, backgroundColor: colors.park50 },
+  greenText: { fontFamily: fonts.semibold, fontSize: 13, color: colors.park },
+  unit: { minHeight: TOUCH, flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: colors.line },
+  unitCfg: { flex: 1.1, fontFamily: fonts.semibold, fontSize: 14, color: colors.ink },
+  unitArea: { flex: 1, fontFamily: fonts.regular, fontSize: 13, color: colors.text },
+  unitPrice: { flex: 1, textAlign: 'right', fontFamily: fonts.bold, fontSize: 14, color: colors.forest },
+  exploreGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  explore: { flexGrow: 1, flexBasis: '45%', minHeight: 64, alignItems: 'center', justifyContent: 'center', gap: 4, borderRadius: radius.md, borderWidth: 1, borderColor: colors.line, backgroundColor: '#fff' },
+  exploreText: { fontFamily: fonts.semibold, fontSize: 13, color: colors.ink },
   faq: { borderBottomWidth: 1, borderBottomColor: colors.line, paddingBottom: 8 },
   faqQ: { minHeight: TOUCH, flexDirection: 'row', alignItems: 'center', gap: 10 },
   faqQText: { flex: 1, fontFamily: fonts.semibold, fontSize: 15, color: colors.ink },
