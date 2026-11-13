@@ -202,7 +202,7 @@ const styles = StyleSheet.create({
   mark: { width: 14, height: 14, borderRadius: 7, borderBottomRightRadius: 2, backgroundColor: colors.forest, transform: [{ rotate: '45deg' }] },
   brandText: { fontFamily: fonts.bold, fontSize: 14, color: colors.ink },
   brandEm: { fontFamily: fonts.regular, color: colors.muted },
-  title: { fontFamily: fonts.display, fontSize: 22, lineHeight: 28, color: colors.ink, textAlign: 'center' },
+  title: { fontFamily: fonts.extrabold, fontSize: 22, lineHeight: 28, letterSpacing: -0.5, color: colors.ink, textAlign: 'center' },
   text: { marginTop: 6, marginBottom: 14, fontFamily: fonts.regular, fontSize: 14, lineHeight: 20, color: colors.text, textAlign: 'center' },
   primary: { minHeight: 50, borderRadius: 14, backgroundColor: colors.forest, alignItems: 'center', justifyContent: 'center' },
   primaryText: { fontFamily: fonts.bold, fontSize: 16, color: '#fff' },

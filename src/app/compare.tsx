@@ -128,7 +128,7 @@ export default function CompareScreen() {
             <View style={styles.labelCell} />
             {list.map((p) => (
               <View key={p.id} style={[styles.cell, styles.actions]}>
-                <Button title="View on map" compact onPress={() => router.navigate({ pathname: '/', params: { pin: p.id } })} />
+                <Button title="View on map" compact onPress={() => router.navigate({ pathname: '/map', params: { pin: p.id } })} />
                 {isFieldOn(p, 'enquire') ? <Button title="Enquire" compact variant="secondary" onPress={() => void enquireAbout(p)} /> : null}
               </View>
             ))}

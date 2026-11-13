@@ -1,5 +1,5 @@
-import { Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold } from '@expo-google-fonts/inter';
-import { PlayfairDisplay_700Bold } from '@expo-google-fonts/playfair-display';
+import { Ionicons } from '@expo/vector-icons';
+import { Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold, Inter_800ExtraBold } from '@expo-google-fonts/inter';
 import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
@@ -24,7 +24,10 @@ export default function RootLayout() {
     Inter_500Medium,
     Inter_600SemiBold,
     Inter_700Bold,
-    PlayfairDisplay_700Bold,
+    Inter_800ExtraBold,
+    // Load the icon font up front so icons never render as empty boxes/circles
+    // on the first frame (or at all on devices where lazy loading fails).
+    ...Ionicons.font,
   });
 
   useEffect(() => {

@@ -48,7 +48,7 @@ export default function FavoritesScreen() {
             }
           />
           <View style={styles.actions}>
-            <Button title="📍 View on map" compact variant="secondary" onPress={() => router.navigate({ pathname: '/', params: { pin: item.id } })} style={styles.flex} />
+            <Button title="📍 View on map" compact variant="secondary" onPress={() => router.navigate({ pathname: '/map', params: { pin: item.id } })} style={styles.flex} />
             {isFieldOn(item, 'enquire') ? <Button title="Enquire" compact onPress={() => void enquireAbout(item)} style={styles.flex} /> : null}
           </View>
         </View>

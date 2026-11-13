@@ -343,7 +343,7 @@ function ProjectBody({
           {pin.hasBrochure ? <Small icon="document-text-outline" label="Brochure" onPress={() => router.push({ pathname: '/brochure/[id]', params: { id: pin.id, title: pin.title } })} /> : null}
         </View>
         <View style={styles.actionRow}>
-          {hasCoords(pin) ? <Small icon="map" label="See on live map" onPress={() => router.navigate({ pathname: '/', params: { pin: pin.id } })} /> : null}
+          {hasCoords(pin) ? <Small icon="map" label="See on live map" onPress={() => router.navigate({ pathname: '/map', params: { pin: pin.id } })} /> : null}
           {signedIn && isBuyer(user) ? (
             <Small icon={compare.pins.includes(pin.id) ? 'git-compare' : 'git-compare-outline'} label={compare.pins.includes(pin.id) ? 'In compare' : 'Compare'} active={compare.pins.includes(pin.id)} onPress={() => compare.toggle(pin.id)} />
           ) : null}

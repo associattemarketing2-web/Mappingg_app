@@ -182,7 +182,7 @@ const styles = StyleSheet.create({
   content: { paddingHorizontal: 18, paddingTop: 10, paddingBottom: 6 },
   top: { flexDirection: 'row', gap: 14, paddingRight: 34 },
   head: { flex: 1, minWidth: 0 },
-  title: { fontFamily: fonts.display, fontSize: 21, lineHeight: 26, color: colors.mapInk },
+  title: { fontFamily: fonts.bold, fontSize: 20, lineHeight: 26, letterSpacing: -0.3, color: colors.mapInk },
   meta: { marginTop: 2, fontFamily: fonts.regular, fontSize: 13, color: colors.muted },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 8 },
   details: { marginTop: 14, borderTopWidth: 1, borderTopColor: colors.line, paddingTop: 10, gap: 8 },

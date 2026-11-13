@@ -9,6 +9,7 @@ import { MapGate } from '@/components/map/MapGate';
 import { Legend, SearchBar, SideButtons, Toolbar } from '@/components/map/MapControls';
 import { nativeMapAvailable } from '@/components/map/nativeMap';
 import { PinSheet } from '@/components/map/PinSheet';
+import { WebMap } from '@/components/map/WebMap';
 import { ProjectCard } from '@/components/ProjectCard';
 import { AppText } from '@/components/ui/AppText';
 import { ErrorState, LoadingState } from '@/components/ui/States';
@@ -270,8 +271,8 @@ export function LiveMapScreen({ onBack }: { onBack?: () => void }) {
   if (pinsQ.isPending) return <LoadingState label={pinsQ.failureCount > 0 ? 'Couldn’t load the projects. Retrying…' : 'Loading projects…'} />;
   if (pinsQ.isError && !pinsQ.data) return <ErrorState error={pinsQ.error} onRetry={() => void pinsQ.refetch()} />;
 
-  if (!LiveMap || mapFailed) {
-    return <MapListFallback pins={allPins} reason={mapFailed ? 'failed' : 'expo-go'} onRetry={() => setMapFailed(false)} />;
+  if (mapFailed) {
+    return <MapListFallback pins={allPins} reason="failed" onRetry={() => setMapFailed(false)} />;
   }
 
   const infraMeta = (b: InfraMarker) => {
@@ -281,6 +282,7 @@ export function LiveMapScreen({ onBack }: { onBack?: () => void }) {
 
   return (
     <View style={styles.flex}>
+      {LiveMap ? (
       <LiveMap
         ref={map}
         pins={shownPins}
@@ -311,6 +313,25 @@ export function LiveMapScreen({ onBack }: { onBack?: () => void }) {
         onReady={onMapReady}
         onLoadError={() => setMapFailed(true)}
       />
+      ) : (
+        // Expo Go / builds without the native engine: same map, drawn in a WebView.
+        <WebMap
+          ref={map}
+          pins={shownPins}
+          selectedId={selected?.id ?? null}
+          basemap={basemap}
+          me={me}
+          onPinPress={(p) => openPin(p, false)}
+          onMapPress={() => {
+            setSelected(null);
+            setInfo(null);
+            setSuggestOpen(false);
+            Keyboard.dismiss();
+          }}
+          onReady={onMapReady}
+          onLoadError={() => setMapFailed(true)}
+        />
+      )}
 
       <SafeAreaView edges={['top']} style={styles.top} pointerEvents="box-none">
         <OfflineBanner />
