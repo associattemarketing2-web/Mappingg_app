@@ -63,7 +63,6 @@ export default function RootLayout() {
                 <Stack.Screen name="browse/[kind]/[slug]" options={{ title: '' }} />
                 <Stack.Screen name="auth/sign-in" options={{ title: 'Sign in', presentation: 'modal' }} />
                 <Stack.Screen name="auth/sign-up" options={{ title: 'Create account', presentation: 'modal' }} />
-                <Stack.Screen name="auth/whatsapp" options={{ title: 'WhatsApp', presentation: 'modal' }} />
                 <Stack.Screen name="brochure/[id]" options={{ title: 'Brochure' }} />
                 <Stack.Screen name="site-visit" options={{ title: 'Book a site visit', presentation: 'modal' }} />
                 <Stack.Screen name="auth/forgot-password"options={{ title: 'Reset password', presentation: 'modal' }} />

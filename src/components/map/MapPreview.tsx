@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import * as Location from 'expo-location';
-import { useCallback, useRef, useState, type ComponentType, type Ref } from 'react';
+import { forwardRef, useCallback, useRef, useState, type ComponentType, type Ref } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { STATUS_COLOR, type PinStatus } from '@/constants/status';
 import { colors, fonts, radius, shadow, type } from '@/constants/theme';
@@ -35,8 +35,13 @@ interface Props {
   pins: Pin[];
   height?: number;
   loading?: boolean;
-  /** Label in the centre of the map (e.g. the city). */
-  cityLabel?: string;
+  /**
+   * 'card' = rounded box; 'bleed' = edge to edge across the screen, its top and
+   * bottom fading into the page (the parent removes its side padding).
+   */
+  variant?: 'card' | 'bleed';
+  /** Page colour the 'bleed' edges fade into. */
+  fadeTo?: string;
   /** Pins the first view is fitted to (default: all pins). */
   focus?: Pin[];
   /** Called when the visitor taps a pin; return false to stop the callout (e.g. guest limit). */
@@ -46,9 +51,24 @@ interface Props {
   onExpand?(): void;
   /** True while a finger is on the map (lets a parent ScrollView pause). */
   onTouching?(active: boolean): void;
+  /** Show "● <text>" bottom-left instead of the status legend. */
+  liveBadge?: string;
 }
 
-export function MapPreview({ pins, focus, height = 420, loading, cityLabel, canOpen, onOpenProject, onExpand, onTouching }: Props) {
+export function MapPreview({
+  pins,
+  focus,
+  height = 420,
+  loading,
+  variant = 'card',
+  fadeTo = '#f4faf7',
+  canOpen,
+  onOpenProject,
+  onExpand,
+  onTouching,
+  liveBadge,
+}: Props) {
+  const bleed = variant === 'bleed';
   const map = useRef<LiveMapHandle>(null);
   const [selected, setSelected] = useState<Pin | null>(null);
   const [me, setMe] = useState<{ lat: number; lng: number } | null>(null);
@@ -72,54 +92,24 @@ export function MapPreview({ pins, focus, height = 420, loading, cityLabel, canO
   const locate = async () => {
     if (locating) return;
     setLocating(true);
-    try {
-      let perm = await Location.getForegroundPermissionsAsync();
-      if (perm.status !== 'granted' && perm.canAskAgain) perm = await Location.requestForegroundPermissionsAsync();
-      if (perm.status !== 'granted') return;
-      const pos =
-        (await Location.getLastKnownPositionAsync({ maxAge: 120_000 })) ||
-        (await withTimeout(Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }), 15_000));
-      const here = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-      setMe(here);
-      map.current?.flyTo(here.lat, here.lng, 13);
-    } catch {
-      /* location unavailable: keep the current view */
-    } finally {
-      setLocating(false);
-    }
+    const here = await locateMe();
+    setLocating(false);
+    if (!here) return; // location unavailable: keep the current view
+    setMe(here);
+    map.current?.flyTo(here.lat, here.lng, 13);
   };
 
   const price = selected ? shown(selected, 'price', selected.price) : '';
 
   return (
     <View
-      style={[styles.card, { height }]}
+      style={[bleed ? styles.bleed : styles.card, { height }]}
       onTouchStart={() => onTouching?.(true)}
       onTouchEnd={() => onTouching?.(false)}
       onTouchCancel={() => onTouching?.(false)}
     >
       {pins.length ? (
-        NativeMap ? (
-          <NativeMap
-            ref={map}
-            pins={pins}
-            infra={[]}
-            roads={[]}
-            infraTypes={[]}
-            boundary={[]}
-            basemap="map"
-            selectedId={selected?.id ?? null}
-            pulseId={null}
-            me={me}
-            onPinPress={pick}
-            onInfraPress={() => undefined}
-            onRoadPress={() => undefined}
-            onMapPress={() => setSelected(null)}
-            onReady={fit}
-          />
-        ) : (
-          <WebMap ref={map} pins={pins} selectedId={selected?.id ?? null} me={me} onPinPress={pick} onMapPress={() => setSelected(null)} onReady={fit} />
-        )
+        <MapCanvas ref={map} pins={pins} selectedId={selected?.id ?? null} me={me} onPinPress={pick} onMapPress={() => setSelected(null)} onReady={fit} />
       ) : null}
 
       {loading || (pins.length > 0 && !ready) ? (
@@ -129,10 +119,12 @@ export function MapPreview({ pins, focus, height = 420, loading, cityLabel, canO
         </View>
       ) : null}
 
-      {cityLabel && ready && !selected ? (
-        <View style={styles.city} pointerEvents="none">
-          <Text style={styles.cityText}>{cityLabel}</Text>
-        </View>
+      {bleed ? (
+        <>
+          {/* Soft edges so the map melts into the page instead of sitting in a box. */}
+          <View pointerEvents="none" style={[styles.fadeTop, { backgroundImage: `linear-gradient(180deg, ${fadeTo} 0%, ${fadeTo}00 100%)` }]} />
+          <View pointerEvents="none" style={[styles.fadeBottom, { backgroundImage: `linear-gradient(0deg, ${fadeTo} 0%, ${fadeTo}00 100%)` }]} />
+        </>
       ) : null}
 
       {selected ? (
@@ -182,21 +174,87 @@ export function MapPreview({ pins, focus, height = 420, loading, cityLabel, canO
         </View>
       </View>
 
-      <View style={styles.legend} pointerEvents="none">
-        {LEGEND.map((l) => (
-          <View key={l.s} style={styles.legendItem}>
-            <View style={[styles.dot, { backgroundColor: STATUS_COLOR[l.s] }]} />
-            <Text style={styles.legendText} numberOfLines={1}>
-              {l.label}
-            </Text>
-          </View>
-        ))}
-      </View>
+      {liveBadge ? (
+        <LiveBadge text={liveBadge} style={styles.liveBadge} />
+      ) : (
+        <View style={styles.legend} pointerEvents="none">
+          {LEGEND.map((l) => (
+            <View key={l.s} style={styles.legendItem}>
+              <View style={[styles.dot, { backgroundColor: STATUS_COLOR[l.s] }]} />
+              <Text style={styles.legendText} numberOfLines={1}>
+                {l.label}
+              </Text>
+            </View>
+          ))}
+        </View>
+      )}
     </View>
   );
 }
 
+/** "● 912 Projects Live" pill. */
+export function LiveBadge({ text, style }: { text: string; style?: object }) {
+  return (
+    <View style={[styles.live, style]} pointerEvents="none">
+      <View style={styles.liveDot} />
+      <Text style={styles.liveText}>{text}</Text>
+    </View>
+  );
+}
+
+/** The map engine on its own: native MapLibre when available, otherwise the WebView map. */
+export const MapCanvas = forwardRef<LiveMapHandle, {
+
+  pins: Pin[];
+  selectedId: string | null;
+  me: { lat: number; lng: number } | null;
+  onPinPress(pin: Pin): void;
+  onMapPress(): void;
+  onReady(): void;
+}>(function MapCanvas(p, ref) {
+  if (NativeMap) {
+    return (
+      <NativeMap
+        ref={ref}
+        pins={p.pins}
+        infra={[]}
+        roads={[]}
+        infraTypes={[]}
+        boundary={[]}
+        basemap="map"
+        selectedId={p.selectedId}
+        pulseId={null}
+        me={p.me}
+        onPinPress={p.onPinPress}
+        onInfraPress={() => undefined}
+        onRoadPress={() => undefined}
+        onMapPress={p.onMapPress}
+        onReady={p.onReady}
+      />
+    );
+  }
+  return <WebMap ref={ref} pins={p.pins} selectedId={p.selectedId} me={p.me} onPinPress={p.onPinPress} onMapPress={p.onMapPress} onReady={p.onReady} />;
+});
+
+/** Asks for location (once) and returns the device position, or null. */
+export async function locateMe(): Promise<{ lat: number; lng: number } | null> {
+  try {
+    let perm = await Location.getForegroundPermissionsAsync();
+    if (perm.status !== 'granted' && perm.canAskAgain) perm = await Location.requestForegroundPermissionsAsync();
+    if (perm.status !== 'granted') return null;
+    const pos =
+      (await Location.getLastKnownPositionAsync({ maxAge: 120_000 })) ||
+      (await withTimeout(Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }), 15_000));
+    return { lat: pos.coords.latitude, lng: pos.coords.longitude };
+  } catch {
+    return null;
+  }
+}
+
 const styles = StyleSheet.create({
+  bleed: { overflow: 'hidden', backgroundColor: '#e8f1ea' },
+  fadeTop: { position: 'absolute', left: 0, right: 0, top: 0, height: 26 },
+  fadeBottom: { position: 'absolute', left: 0, right: 0, bottom: 0, height: 26 },
   card: {
     borderRadius: 28,
     overflow: 'hidden',
@@ -207,16 +265,6 @@ const styles = StyleSheet.create({
   pressed: { opacity: 0.88 },
   loading: { ...StyleSheet.absoluteFill, alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: '#e8f1ea' },
   loadingText: { ...type.small, color: colors.forest },
-  city: {
-    position: 'absolute',
-    alignSelf: 'center',
-    top: '46%',
-    paddingHorizontal: 16,
-    paddingVertical: 6,
-    borderRadius: radius.pill,
-    backgroundColor: 'rgba(255,255,255,0.82)',
-  },
-  cityText: { ...type.h2, fontFamily: fonts.extrabold, color: colors.ink },
   callout: {
     position: 'absolute',
     top: 14,
@@ -273,6 +321,20 @@ const styles = StyleSheet.create({
     ...shadow.card,
     elevation: 4,
   },
+  liveBadge: { position: 'absolute', left: 14, bottom: 14 },
+  live: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    height: 38,
+    paddingHorizontal: 14,
+    borderRadius: radius.pill,
+    backgroundColor: '#fff',
+    ...shadow.card,
+    elevation: 4,
+  },
+  liveDot: { width: 11, height: 11, borderRadius: 6, backgroundColor: '#22b35e' },
+  liveText: { ...type.small, fontFamily: fonts.semibold, fontSize: 14, color: colors.ink },
   legendItem: { flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 1 },
   dot: { width: 12, height: 12, borderRadius: 6 },
   legendText: { ...type.small, fontSize: 12.5, color: colors.ink },

@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { Redirect, useRouter } from 'expo-router';
+import { Redirect, useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { requireOptionalNativeModule } from 'expo';
 import { BackHandler, Pressable, StyleSheet, Text, TurboModuleRegistry, View } from 'react-native';
@@ -14,6 +14,7 @@ import { ErrorState, LoadingState } from '@/components/ui/States';
 import { colors, fonts, TOUCH } from '@/constants/theme';
 import { panelOf, useAuth, type PanelKind } from '@/providers/AuthProvider';
 import { useToast } from '@/providers/ToastProvider';
+import { siteMode } from '@/lib/siteMode';
 import { ApiError } from '@/services/api/errors';
 
 // The panel needs native code (WebView, file system, sharing) that older app
@@ -116,6 +117,13 @@ function Panel({ kind, PanelWebView }: { kind: PanelKind; PanelWebView: typeof P
     [cfg.intake, open],
   );
 
+  // Never leave a tab highlighted that didn't open (e.g. no permission any more).
+  useEffect(() => {
+    if (!pending) return;
+    const t = setTimeout(() => setPending(''), 8000);
+    return () => clearTimeout(t);
+  }, [pending]);
+
   const goShell = useCallback((label: string) => {
     setSection('shell');
     setPending(label);
@@ -125,7 +133,8 @@ function Panel({ kind, PanelWebView }: { kind: PanelKind; PanelWebView: typeof P
   const onShell = useCallback(
     (s: ShellState) => {
       setShell(s);
-      setPending('');
+      // Keep the tapped tab highlighted until the panel has actually opened it.
+      setPending((p) => (p && p !== s.active ? p : ''));
       const own = cfg.own[s.active];
       if (own) {
         // The panel itself opened the Map Editor / Intake (e.g. a dashboard
@@ -175,6 +184,21 @@ function Panel({ kind, PanelWebView }: { kind: PanelKind; PanelWebView: typeof P
     else goShell(label);
   };
 
+  // Back on the panel (Panel button or the back key): the panel opens first again.
+  useFocusEffect(
+    useCallback(() => {
+      siteMode.set(false);
+    }, []),
+  );
+
+  // The logo in the panel header opens the app's own Home page (live map, featured
+  // projects). The panel stays loaded underneath, so "Panel" on Home comes back instantly.
+  const goHome = () => {
+    setMoreOpen(false);
+    siteMode.set(true);
+    router.push('/');
+  };
+
   // ---- Android back button -----------------------------------------------
   useEffect(() => {
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
@@ -210,18 +234,18 @@ function Panel({ kind, PanelWebView }: { kind: PanelKind; PanelWebView: typeof P
       <OfflineBanner />
       <View style={styles.body}>
         <View style={hidden('shell')}>
-          <PanelWebView ref={shellRef} path={cfg.shell} mode="shell" token={token} email={email} onShell={onShell} onSignedOut={onSignedOut} onOpenMap={openMap} onOpenIntake={cfg.intake ? openIntake : undefined} onOpenProject={openProject} />
+          <PanelWebView ref={shellRef} path={cfg.shell} mode="shell" token={token} email={email} onShell={onShell} onSignedOut={onSignedOut} onOpenMap={openMap} onOpenIntake={cfg.intake ? openIntake : undefined} onOpenProject={openProject} onHome={goHome} />
         </View>
         {loaded.includes('editor') ? (
           <View style={hidden('editor')}>
             <Header title="Map Editor" onReload={() => editorRef.current?.reload()} />
-            <PanelWebView ref={editorRef} path={cfg.editor} mode="frame" token={token} email={email} onSignedOut={onSignedOut} onOpenMap={openMap} onOpenIntake={cfg.intake ? openIntake : undefined} onOpenProject={openProject} />
+            <PanelWebView ref={editorRef} path={cfg.editor} mode="frame" token={token} email={email} onSignedOut={onSignedOut} onOpenMap={openMap} onOpenIntake={cfg.intake ? openIntake : undefined} onOpenProject={openProject} onHome={goHome} />
           </View>
         ) : null}
         {cfg.intake && loaded.includes('intake') ? (
           <View style={hidden('intake')}>
             <Header title="Projects Intake" onReload={() => intakeRef.current?.reload()} />
-            <PanelWebView ref={intakeRef} path={intakePath} mode="frame" token={token} email={email} onSignedOut={onSignedOut} onOpenMap={openMap} onOpenIntake={cfg.intake ? openIntake : undefined} onOpenProject={openProject} />
+            <PanelWebView ref={intakeRef} path={intakePath} mode="frame" token={token} email={email} onSignedOut={onSignedOut} onOpenMap={openMap} onOpenIntake={cfg.intake ? openIntake : undefined} onOpenProject={openProject} onHome={goHome} />
           </View>
         ) : null}
         {section === 'profile' ? (

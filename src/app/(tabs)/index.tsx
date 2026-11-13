@@ -8,12 +8,13 @@ import { MapGate } from '@/components/map/MapGate';
 import { MapPreview } from '@/components/map/MapPreview';
 import { OfflineBanner } from '@/components/OfflineBanner';
 import { ErrorState, LoadingState } from '@/components/ui/States';
-import { colors, radius, type } from '@/constants/theme';
+import { colors, fonts, radius, type } from '@/constants/theme';
 import { cityOf } from '@/lib/entities';
 import { usePins } from '@/hooks/usePublicData';
 import { useFavorites } from '@/hooks/useSavedList';
 import { awaitingApproval, isAgent, panelOf, useAuth } from '@/providers/AuthProvider';
 import { useToast } from '@/providers/ToastProvider';
+import { siteMode } from '@/lib/siteMode';
 import { hasCoords } from '@/services/publicData';
 import type { Pin } from '@/types/models';
 
@@ -26,7 +27,7 @@ export default function HomeScreen() {
   // Signed out → the app's front page; staff and approved developers → their panel.
   if (status === 'signedOut' || !user) return <Redirect href="/welcome" />;
   if (user.needsMobile) return <MapGate kind="mobile" />;
-  if (panelOf(user)) return <Redirect href="/panel" />;
+  if (panelOf(user) && !siteMode.get()) return <Redirect href="/panel" />;
   if (awaitingApproval(user)) return <MapGate kind="pending" onSignOut={signOut} />;
   return <Home />;
 }
@@ -64,9 +65,26 @@ function Home() {
           <View style={styles.header}>
             <Brand />
             <View style={styles.headerBtns}>
-              <Pressable onPress={() => router.push('/notifications')} accessibilityRole="button" accessibilityLabel="Notifications" style={styles.iconBtn}>
-                <Ionicons name="notifications-outline" size={21} color={colors.forestDeep} />
-              </Pressable>
+              {panelOf(user) ? (
+                // Opened from the panel's logo: the way back to the panel.
+                <Pressable
+                  onPress={() => {
+                    siteMode.set(false);
+                    if (router.canGoBack()) router.back();
+                    else router.replace('/panel');
+                  }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Back to your panel"
+                  style={styles.panelBtn}
+                >
+                  <Ionicons name="grid" size={16} color="#fff" />
+                  <Text style={styles.panelBtnText}>Panel</Text>
+                </Pressable>
+              ) : (
+                <Pressable onPress={() => router.push('/notifications')} accessibilityRole="button" accessibilityLabel="Notifications" style={styles.iconBtn}>
+                  <Ionicons name="notifications-outline" size={21} color={colors.forestDeep} />
+                </Pressable>
+              )}
               <Pressable onPress={() => router.push('/account')} accessibilityRole="button" accessibilityLabel="Profile" style={styles.iconBtn}>
                 <Ionicons name="person" size={19} color={colors.forestDeep} />
               </Pressable>
@@ -101,7 +119,6 @@ function Home() {
             focus={pune}
             loading={pinsQ.isPending}
             height={450}
-            cityLabel="Pune"
             onOpenProject={open}
             onExpand={() => router.push('/map')}
             onTouching={(t) => setScrollOn(!t)}
@@ -141,6 +158,8 @@ const styles = StyleSheet.create({
   content: { paddingHorizontal: GUTTER, paddingTop: 6, paddingBottom: 28 },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   headerBtns: { flexDirection: 'row', gap: 10 },
+  panelBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, height: 46, paddingHorizontal: 14, borderRadius: radius.pill, backgroundColor: colors.forestDeep },
+  panelBtnText: { ...type.small, fontFamily: fonts.semibold, color: '#fff' },
   iconBtn: {
     width: 46,
     height: 46,

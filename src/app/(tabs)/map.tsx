@@ -25,6 +25,7 @@ import { useCompare, useFavorites } from '@/hooks/useSavedList';
 import { awaitingApproval, isAgent, isBuyer, panelOf, useAuth } from '@/providers/AuthProvider';
 import { useGuestGate } from '@/providers/GuestGateProvider';
 import { useToast } from '@/providers/ToastProvider';
+import { siteMode } from '@/lib/siteMode';
 import { hasCoords } from '@/services/publicData';
 import type { AreaBoundary, InfraMarker, Pin, Road } from '@/types/models';
 import type { Basemap, LiveMapHandle } from '@/components/map/LiveMap';
@@ -45,7 +46,7 @@ export default function MapScreen() {
   // Signed out → the app's front page; staff and approved developers → their panel.
   if (status === 'signedOut' || !user) return <Redirect href="/welcome" />;
   if (user.needsMobile) return <MapGate kind="mobile" />;
-  if (panelOf(user)) return <Redirect href="/panel" />;
+  if (panelOf(user) && !siteMode.get()) return <Redirect href="/panel" />;
   if (awaitingApproval(user)) return <MapGate kind="pending" onSignOut={signOut} />;
   return <LiveMapScreen />;
 }

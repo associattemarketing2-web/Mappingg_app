@@ -1,11 +1,13 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { Redirect, useRouter } from 'expo-router';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { FlatList, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Brand, FeaturedProjectCard, PAGE_BG, PageBackground, SectionHead, Swoosh } from '@/components/home/HomeBits';
+import { MapPreview } from '@/components/map/MapPreview';
 import { LoadingState } from '@/components/ui/States';
+import { cityOf } from '@/lib/entities';
 import { colors, fonts, radius, type } from '@/constants/theme';
 import { usePins } from '@/hooks/usePublicData';
 import { useAuth } from '@/providers/AuthProvider';
@@ -37,7 +39,10 @@ function Welcome() {
   const gate = useGuestGate();
   const pinsQ = usePins();
 
-  const projects = useMemo(() => (pinsQ.data || []).filter((p) => hasCoords(p) && p.isProject), [pinsQ.data]);
+  const [scrollOn, setScrollOn] = useState(true);
+  const pins = useMemo(() => (pinsQ.data || []).filter(hasCoords), [pinsQ.data]);
+  const projects = useMemo(() => pins.filter((p) => p.isProject), [pins]);
+  const pune = useMemo(() => projects.filter((p) => cityOf(p) === 'pune'), [projects]);
   const featured = useMemo(() => {
     const live = projects.filter((p) => p.status !== 'sold' && (p.image || p.brochureImage));
     return [...live].sort((a, b) => Number(b.highlighted) - Number(a.highlighted) || (b.updatedAt || '').localeCompare(a.updatedAt || '')).slice(0, 10);
@@ -60,7 +65,7 @@ function Welcome() {
           </Pressable>
         </View>
 
-        <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        <ScrollView contentContainerStyle={styles.content} scrollEnabled={scrollOn} showsVerticalScrollIndicator={false}>
           {/* Hero: headline on the left, city illustration bleeding off the right edge. */}
           <View style={styles.hero}>
             <View style={styles.heroArt} accessible accessibilityLabel="Apartment towers with a map pin">
@@ -76,14 +81,32 @@ function Welcome() {
             <Text style={styles.sub} maxFontSizeMultiplier={1.3}>
               Every verified real estate project — developer, RERA, price and possession on one map.
             </Text>
-            <Pressable onPress={() => router.push('/live-map')} accessibilityRole="button" accessibilityLabel="Open the live map" style={({ pressed }) => [styles.livePillWrap, pressed && styles.pressed]}>
-              <View style={styles.livePill}>
-                <Ionicons name="layers" size={22} color="#8fe3b8" />
-                <Text style={styles.livePillText}>{projects.length ? `${projects.length} Projects Live` : 'Open Live Map'}</Text>
-                <Ionicons name="chevron-forward" size={18} color="#fff" />
+            <Pressable
+              onPress={() => router.push('/live-map')}
+              accessibilityRole="button"
+              accessibilityLabel="Explore the live map"
+              style={({ pressed }) => [styles.exploreWrap, pressed && styles.pressed]}
+            >
+              <View style={styles.explore}>
+                <Ionicons name="map" size={20} color="#8fe3b8" />
+                <Text style={styles.exploreText}>Explore Map</Text>
+                <Ionicons name="arrow-forward" size={18} color="#fff" />
               </View>
             </Pressable>
           </View>
+
+          {/* The real live map, right on the front page. Touching it pauses page scrolling so it can be panned. */}
+          <SectionHead title="Explore on Live Map" action="Full map" onAction={() => router.push('/live-map')} />
+          <MapPreview
+            pins={pins}
+            focus={pune}
+            loading={pinsQ.isPending}
+            height={380}
+            canOpen={(p) => gate.allow('pin', p.id)}
+            onOpenProject={openProject}
+            onExpand={() => router.push('/live-map')}
+            onTouching={(t) => setScrollOn(!t)}
+          />
 
           {featured.length ? (
             <>
@@ -156,14 +179,23 @@ const styles = StyleSheet.create({
 
   hero: { minHeight: 330 },
   heroArt: { position: 'absolute', right: -GUTTER, top: -18, width: '50%', height: 330 },
+  exploreWrap: { marginTop: 22, alignSelf: 'flex-start', borderRadius: radius.pill, elevation: 5, shadowColor: '#0a4535', shadowOpacity: 0.25, shadowRadius: 10, shadowOffset: { width: 0, height: 5 } },
+  explore: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    height: 54,
+    paddingHorizontal: 22,
+    borderRadius: radius.pill,
+    backgroundColor: '#0b4f3d',
+    backgroundImage: 'linear-gradient(135deg, #0c5a45, #0a4535)',
+  },
+  exploreText: { ...type.bodyStrong, fontSize: 16, color: '#fff' },
   headline: { ...type.hero, color: colors.ink, marginTop: 8 },
   accentDeep: { color: colors.forest },
   accent: { color: '#12a079' },
   heroSwoosh: { marginTop: 2, marginLeft: 46 },
   sub: { ...type.body, color: colors.text, marginTop: 14, maxWidth: '78%' },
-  livePillWrap: { marginTop: 22, alignSelf: 'flex-start', borderRadius: radius.pill, elevation: 5, shadowColor: '#0a4535', shadowOpacity: 0.25, shadowRadius: 10, shadowOffset: { width: 0, height: 5 } },
-  livePill: { flexDirection: 'row', alignItems: 'center', gap: 10, height: 54, paddingHorizontal: 20, borderRadius: radius.pill, backgroundColor: '#0b4f3d', backgroundImage: 'linear-gradient(135deg, #0c5a45, #0a4535)' },
-  livePillText: { ...type.bodyStrong, fontSize: 16, color: '#fff' },
 
   bleed: { marginHorizontal: -GUTTER },
   featuredList: { gap: 14, paddingHorizontal: GUTTER, paddingBottom: 10 },

@@ -3,6 +3,7 @@ import * as WebBrowser from 'expo-web-browser';
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { AppText } from '@/components/ui/AppText';
+import { AuthHeader } from '@/components/ui/AuthHeader';
 import { Button } from '@/components/ui/Button';
 import { Checkbox, ChoicePills } from '@/components/ui/Choice';
 import { PhoneField } from '@/components/ui/PhoneField';
@@ -13,13 +14,13 @@ import { siteLink } from '@/constants/contact';
 import { colors, fonts, radius } from '@/constants/theme';
 import { DEFAULT_CODE, formatPhone, isValidNumber, PHONE_ERROR } from '@/lib/phone';
 import { useAuth } from '@/providers/AuthProvider';
-import { errorMessage } from '@/services/api/errors';
+import { ApiError, errorMessage } from '@/services/api/errors';
 import { requestOtp, SIGNUP_OPTIONS, type SignupInput, type SignupRole } from '@/services/auth';
 
 // Same fields and rules as the website's "Create account" form: buyers give
-// name, WhatsApp, email and password (or use "Create account with WhatsApp
-// OTP"); developers and agents also their company + RERA details (all required
-// except a developer's website). The WhatsApp number is verified with a code.
+// name, WhatsApp, email and password; developers and agents also their company
+// + RERA details (all required except a developer's website). The account is
+// created directly; a WhatsApp code is asked for only while the server requires it.
 
 const ROLES = [
   { value: 'buyer', label: 'Buyer / Investor' },
@@ -69,10 +70,6 @@ export default function SignUpScreen() {
 
   const sendCode = async () => {
     setFormError('');
-    if (!validate()) {
-      setFormError('Please fill in all required fields.');
-      return;
-    }
     setBusy(true);
     try {
       const sent = await requestOtp({ email: email.trim().toLowerCase(), mobile: formatPhone(phone.code, phone.number) }, 'signup', name.trim());
@@ -85,10 +82,28 @@ export default function SignUpScreen() {
     }
   };
 
-  const create = async () => {
+  /** "Create account": straight away with email + password. Only if the server
+   *  insists on verifying the WhatsApp number does it ask for a code. */
+  const createNow = async () => {
     setFormError('');
-    if (!/^\d{6}$/.test(otp.trim())) return setFormError('Enter the 6-digit code we sent on WhatsApp.');
-    const base = { name: name.trim(), email: email.trim().toLowerCase(), mobile: formatPhone(phone.code, phone.number), password, otp: otp.trim(), ticket };
+    if (!validate()) {
+      setFormError('Please fill in all required fields.');
+      return;
+    }
+    await create(true);
+  };
+
+  const create = async (direct = false) => {
+    setFormError('');
+    if (!direct && !/^\d{6}$/.test(otp.trim())) return setFormError('Enter the 6-digit code we sent on WhatsApp.');
+    const base = {
+      name: name.trim(),
+      email: email.trim().toLowerCase(),
+      mobile: formatPhone(phone.code, phone.number),
+      password,
+      otp: direct ? '' : otp.trim(),
+      ticket: direct ? '' : ticket,
+    };
     const input: SignupInput =
       role === 'buyer'
         ? // Buyers' preferences are no longer asked here (website, Oct 2026): the live map asks later.
@@ -102,6 +117,12 @@ export default function SignUpScreen() {
       router.dismissAll();
       router.replace(role === 'buyer' ? '/' : '/account');
     } catch (e) {
+      if (direct && e instanceof ApiError && e.code === 'otp') {
+        // The server still verifies new numbers: send the code and show that step.
+        setBusy(false);
+        await sendCode();
+        return;
+      }
       setFormError(errorMessage(e));
     } finally {
       setBusy(false);
@@ -111,11 +132,10 @@ export default function SignUpScreen() {
   if (ticket) {
     return (
       <Screen>
-        <AppText variant="title">Check your WhatsApp</AppText>
-        <AppText style={styles.sub}>We sent a 6-digit code on WhatsApp to {sentTo}. Enter it to create your account.</AppText>
+        <AuthHeader title="One last step" subtitle={`We sent a 6-digit code on WhatsApp to ${sentTo}. Enter it to finish creating your account.`} />
         {formError ? <ErrorBox text={formError} /> : null}
         <TextField label="Verification code" value={otp} onChangeText={(t) => setOtp(t.replace(/\D/g, '').slice(0, 6))} keyboardType="number-pad" autoComplete="one-time-code" textContentType="oneTimeCode" placeholder="6-digit code" />
-        <Button title="Verify & create account" onPress={() => void create()} loading={busy} />
+        <Button title="Verify & create account" onPress={() => void create(false)} loading={busy} />
         <Button title="Resend code" variant="ghost" onPress={() => void sendCode()} disabled={busy} style={styles.gap} />
         <Button title="Change my details" variant="ghost" onPress={() => setTicket('')} />
       </Screen>
@@ -124,25 +144,10 @@ export default function SignUpScreen() {
 
   return (
     <Screen>
-      <AppText variant="title">Create your account</AppText>
+      <AuthHeader title="Create your account" subtitle="Free forever. Explore every project on the live map." />
       <ChoicePills label="I am a" options={ROLES} value={role} onChange={(v) => setRole(v as SignupRole)} />
-      {role === 'buyer' ? (
-        <View style={styles.quick}>
-          <Button title="Create account with WhatsApp OTP" variant="whatsapp" icon="logo-whatsapp" onPress={() => router.replace({ pathname: '/auth/whatsapp', params: { mode: 'create' } })} />
-          <AppText variant="caption" style={styles.quickNote}>
-            Just your WhatsApp number and a 6-digit code — nothing else to fill in.
-          </AppText>
-          <View style={styles.or}>
-            <View style={styles.orLine} />
-            <Text style={styles.orText}>or sign up with email</Text>
-            <View style={styles.orLine} />
-          </View>
-        </View>
-      ) : null}
       <AppText style={styles.sub}>
-        {role === 'buyer'
-          ? 'Your name, WhatsApp number, email and a password — we’ll send a 6-digit code on WhatsApp to verify your number.'
-          : 'All fields are needed so we can verify your RERA details.'}
+        {role === 'buyer' ? 'Your name, WhatsApp number, email and a password.' : 'All fields are needed so we can verify your RERA details.'}
       </AppText>
       <TextField label="Full name" value={name} onChangeText={setName} autoComplete="name" textContentType="name" error={errors.name} />
       <PhoneField label="WhatsApp number" code={phone.code} number={phone.number} onChange={(code, number) => setPhone({ code, number })} error={errors.phone} />
@@ -183,7 +188,7 @@ export default function SignUpScreen() {
       </View>
       {errors.terms ? <Text style={styles.fieldError}>{errors.terms}</Text> : null}
       {formError ? <ErrorBox text={formError} /> : null}
-      <Button title="Continue — verify on WhatsApp" onPress={() => void sendCode()} loading={busy} style={styles.gap} />
+      <Button title="Create account" onPress={() => void createNow()} loading={busy} style={styles.gap} />
       <Button title="I already have an account" variant="ghost" onPress={() => router.replace('/auth/sign-in')} style={styles.gap} />
     </Screen>
   );
@@ -199,11 +204,6 @@ function ErrorBox({ text }: { text: string }) {
 
 const styles = StyleSheet.create({
   sub: { marginTop: 4, marginBottom: 18 },
-  quick: { marginBottom: 6 },
-  quickNote: { marginTop: 6, textAlign: 'center' },
-  or: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 14 },
-  orLine: { flex: 1, height: 1, backgroundColor: colors.line },
-  orText: { fontFamily: fonts.medium, fontSize: 12, color: colors.muted },
   group: { marginTop: 4, marginBottom: 8, padding: 14, borderRadius: radius.md, backgroundColor: colors.land, borderWidth: 1, borderColor: colors.line },
   groupSub: { marginBottom: 12 },
   verify: { backgroundColor: colors.water50, padding: 12, borderRadius: radius.md, marginBottom: 8 },

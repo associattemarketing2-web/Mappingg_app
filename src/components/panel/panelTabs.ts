@@ -1,6 +1,6 @@
 import type { Ionicons } from '@expo/vector-icons';
 
-// The website panels' tabs (components/admin/AdminApp.tsx TAB_META and
+// The website panels' sections (components/admin/AdminApp.tsx TAB_META / NAV and
 // components/dashboard/DeveloperApp.tsx TABS), matched by their label. Which
 // tabs a person gets is decided by the website (role + permissions); the app
 // shows whatever the panel reports.
@@ -8,12 +8,19 @@ import type { Ionicons } from '@expo/vector-icons';
 type IconName = keyof typeof Ionicons.glyphMap;
 
 export const TAB_ICON: Record<string, { on: IconName; off: IconName }> = {
-  Dashboard: { on: 'grid', off: 'grid-outline' },
+  Dashboard: { on: 'home', off: 'home-outline' },
+  Overview: { on: 'home', off: 'home-outline' },
+  'Pins Data': { on: 'list', off: 'list-outline' },
+  'Buyer leads': { on: 'person-add', off: 'person-add-outline' },
+  WhatsApp: { on: 'logo-whatsapp', off: 'logo-whatsapp' },
+  Communication: { on: 'chatbubble-ellipses', off: 'chatbubble-ellipses-outline' },
+  'Integrations & API': { on: 'code-slash', off: 'code-slash-outline' },
+  'Team & Administration': { on: 'id-card', off: 'id-card-outline' },
   'Map Editor': { on: 'map', off: 'map-outline' },
-  Developers: { on: 'business', off: 'business-outline' },
-  'Developer projects': { on: 'location', off: 'location-outline' },
+  Developers: { on: 'construct', off: 'construct-outline' },
+  'Developer projects': { on: 'business', off: 'business-outline' },
   'Projects Intake': { on: 'cloud-upload', off: 'cloud-upload-outline' },
-  Leads: { on: 'call', off: 'call-outline' },
+  Leads: { on: 'chatbubbles', off: 'chatbubbles-outline' },
   Accounts: { on: 'people', off: 'people-outline' },
   Backups: { on: 'server', off: 'server-outline' },
   Blogs: { on: 'newspaper', off: 'newspaper-outline' },
@@ -66,7 +73,7 @@ export function iconFor(label: string): { on: IconName; off: IconName } {
 }
 
 /** Tabs that get the bottom bar first; the rest go under "More". */
-const PRIORITY = ['Dashboard', 'Leads', 'Map Editor', 'Accounts', 'Projects Intake'];
+const PRIORITY = ['Overview', 'Dashboard', 'Leads', 'Map Editor', 'Developer projects', 'Accounts', 'Projects Intake'];
 
 /** Bottom bar slots (excluding Profile): up to 4 tabs, or 3 + More. */
 export function splitTabs<T extends { label: string }>(tabs: T[]): { primary: T[]; more: T[] } {
@@ -92,4 +99,8 @@ export const SHORT_LABEL: Record<string, string> = {
   'Developer projects': 'Projects',
   'SEO & Health': 'SEO',
   'Developer API': 'API',
+  'Integrations & API': 'API',
+  'Team & Administration': 'Team',
+  Communication: 'WhatsApp',
+  'Buyer leads': 'Buyers',
 };
