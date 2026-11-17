@@ -9,8 +9,11 @@ import { apiUrl, config } from '@/constants/config';
 import { colors, TOUCH } from '@/constants/theme';
 import { SESSION_COOKIE } from '@/lib/session';
 import { isAgent, isStaff, useAuth } from '@/providers/AuthProvider';
+import { usePlanGate } from '@/providers/PlanGateProvider';
 import { useToast } from '@/providers/ToastProvider';
 import { brochurePath } from '@/services/account';
+import { apiRequest } from '@/services/api/client';
+import { errorMessage } from '@/services/api/errors';
 
 // "View brochure" — the website's brochure viewer (live map): the brochure
 // (PDF or image, /api/brochure/<pin id>) is drawn page by page with pdf.js,
@@ -52,6 +55,7 @@ export default function BrochureScreen() {
   const { id = '', title = '' } = useLocalSearchParams<{ id: string; title?: string }>();
   const { user, sessionToken } = useAuth();
   const toast = useToast();
+  const planGate = usePlanGate();
   const [saving, setSaving] = useState(false);
   const canDownload = isStaff(user) || (isAgent(user) && !!user?.verified);
   const html = useMemo(() => viewerHtml(apiUrl(brochurePath(String(id)))), [id]);
@@ -70,7 +74,13 @@ export default function BrochureScreen() {
       if (await Sharing.isAvailableAsync()) await Sharing.shareAsync(file.uri, { mimeType: mime, dialogTitle: `${title || 'Project'} brochure` });
       else toast('Brochure saved.');
     } catch {
-      toast('Could not download the brochure. Please try again.');
+      // Refused by the plan (website: cp_brochure_access → 402)? Ask the server why.
+      await apiRequest(brochurePath(String(id), true), { auth: true, text: true }).then(
+        () => toast('Could not download the brochure. Please try again.'),
+        (e) => {
+          if (!planGate.handle(e, String(title || '') || 'Brochure download')) toast(errorMessage(e));
+        },
+      );
     } finally {
       setSaving(false);
     }

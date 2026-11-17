@@ -43,7 +43,9 @@ export const SITE_VISIT_SLOTS = ['10:00 AM – 12:00 PM', '12:00 PM – 2:00 PM'
  */
 export async function getQuickView(number: number): Promise<QuickView | null> {
   try {
-    const r = await apiRequest<Partial<QuickView>>('/api/project-quickview', { query: { n: String(number) } });
+    // Signed in, it counts as opening the project's details on the account's plan
+    // (website: the live map sends the session cookie with this request).
+    const r = await apiRequest<Partial<QuickView>>('/api/project-quickview', { query: { n: String(number) }, auth: true });
     const arr = <T,>(v: unknown): T[] => (Array.isArray(v) ? (v as T[]) : []);
     const s = (v: unknown) => (typeof v === 'string' ? v : '');
     return {
@@ -65,7 +67,8 @@ export async function getQuickView(number: number): Promise<QuickView | null> {
       rera: s(r.rera),
     };
   } catch (e) {
-    if (isApiError(e, 'not_found')) return null;
+    // Not found, or over the plan's limit: keep the project's own details (website: same).
+    if (isApiError(e, 'not_found') || isApiError(e, 'payment_required')) return null;
     throw e;
   }
 }

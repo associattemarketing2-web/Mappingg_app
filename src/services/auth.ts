@@ -14,6 +14,8 @@ export interface BuyerProfileInput {
   budget: string;
   timeline: string;
   purpose: string;
+  /** Plan picked on the sign-up form (a plan code; '' = Free). Paid plans start only after checkout. */
+  plan?: string;
 }
 export interface DeveloperProfileInput {
   company: string;
@@ -21,11 +23,13 @@ export interface DeveloperProfileInput {
   activeProjects: string;
   reraProject: string;
   website: string;
+  plan?: string;
 }
 export interface AgentProfileInput {
   agency: string;
   reraAgent: string;
   areas: string;
+  plan?: string;
 }
 
 export type SignupInput = {

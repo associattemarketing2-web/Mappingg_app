@@ -1,4 +1,4 @@
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
@@ -16,6 +16,10 @@ import { DEFAULT_CODE, formatPhone, isValidNumber, PHONE_ERROR } from '@/lib/pho
 import { useAuth } from '@/providers/AuthProvider';
 import { ApiError, errorMessage } from '@/services/api/errors';
 import { requestOtp, SIGNUP_OPTIONS, type SignupInput, type SignupRole } from '@/services/auth';
+import { rememberSignupPlan } from '@/hooks/useSignupPlan';
+import { useToast } from '@/providers/ToastProvider';
+import { usePlansQuery } from '@/hooks/useSubscriptionsEnabled';
+import { categoryForRole, formatInr, type PublicPlan } from '@/services/subscriptions';
 
 // Same fields and rules as the website's "Create account" form: buyers give
 // name, WhatsApp, email and password; developers and agents also their company
@@ -28,11 +32,21 @@ const ROLES = [
   { value: 'agent', label: 'Agent / Channel Partner' },
 ];
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const PERIOD_SHORT: Record<string, string> = { month: '/month', quarter: '/quarter', half_year: '/6 months', year: '/year' };
+const ROLE_NAME: Record<SignupRole, string> = { buyer: 'Buyer', developer: 'Developer', agent: 'Channel Partner' };
+const isRole = (v: unknown): v is SignupRole => v === 'buyer' || v === 'developer' || v === 'agent';
 
 export default function SignUpScreen() {
   const router = useRouter();
+  const toast = useToast();
+  const params = useLocalSearchParams<{ role?: string; plan?: string }>();
   const { signUp } = useAuth();
-  const [role, setRole] = useState<SignupRole>('buyer');
+  const [role, setRole] = useState<SignupRole>(isRole(params.role) ? params.role : 'buyer');
+  // Plan picker (website: sign-up form): Free by default, or any paid plan of this account type.
+  // Hidden while the subscription master switch is off (website: same) — accounts start as before.
+  const plansQ = usePlansQuery();
+  const plansOn = !!plansQ.data && plansQ.data.enabled !== false;
+  const [planCode, setPlanCode] = useState(String(params.plan || '').slice(0, 40));
   const [name, setName] = useState('');
   const [phone, setPhone] = useState({ code: DEFAULT_CODE, number: '' });
   const [email, setEmail] = useState('');
@@ -46,6 +60,11 @@ export default function SignUpScreen() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState('');
   const [busy, setBusy] = useState(false);
+
+  const rolePlans = (plansQ.data?.plans || []).filter((p) => p.category === categoryForRole(role)).sort((a, b) => a.sort - b.sort);
+  const freePlan = rolePlans.find((p) => p.is_free);
+  const chosenPlan: PublicPlan | undefined = plansOn && planCode ? rolePlans.find((p) => p.code === planCode && !p.is_free) : undefined;
+  // A deep-linked plan of another account type simply counts as Free (chosenPlan is undefined).
 
   const validate = (): boolean => {
     const e: Record<string, string> = {};
@@ -104,17 +123,27 @@ export default function SignUpScreen() {
       otp: direct ? '' : otp.trim(),
       ticket: direct ? '' : ticket,
     };
+    const plan = chosenPlan?.code || '';
     const input: SignupInput =
       role === 'buyer'
         ? // Buyers' preferences are no longer asked here (website, Oct 2026): the live map asks later.
-          { ...base, role, profile: { area: '', configuration: '', budget: '', timeline: '', purpose: '' } }
+          { ...base, role, profile: { area: '', configuration: '', budget: '', timeline: '', purpose: '', plan } }
         : role === 'developer'
-          ? { ...base, role, profile: { ...dev, company: dev.company.trim(), reraProject: dev.reraProject.trim(), website: dev.website.trim() } }
-          : { ...base, role, profile: { agency: agent.agency.trim(), reraAgent: agent.reraAgent.trim(), areas: agent.areas.trim() } };
+          ? { ...base, role, profile: { ...dev, company: dev.company.trim(), reraProject: dev.reraProject.trim(), website: dev.website.trim(), plan } }
+          : { ...base, role, profile: { agency: agent.agency.trim(), reraAgent: agent.reraAgent.trim(), areas: agent.areas.trim(), plan } };
     setBusy(true);
     try {
-      await signUp(input);
+      const created = await signUp(input);
+      await rememberSignupPlan(created.email || created.mobile || base.email, plan);
       router.dismissAll();
+      // A paid plan picked on the form: buyers go straight to its checkout; developers /
+      // channel partners pay after RERA verification (website: same).
+      if (chosenPlan && role === 'buyer') {
+        router.replace('/');
+        router.push({ pathname: '/subscription', params: { plan: chosenPlan.code } });
+        return;
+      }
+      if (chosenPlan) toast(`You picked ${chosenPlan.name}. We’ll verify your RERA number shortly — then open My plan to activate it. Until then you’re on the Free plan.`);
       router.replace(role === 'buyer' ? '/' : '/account');
     } catch (e) {
       if (direct && e instanceof ApiError && e.code === 'otp') {
@@ -172,6 +201,38 @@ export default function SignUpScreen() {
       )}
 
       <TextField label="Password" value={password} onChangeText={setPassword} password autoComplete="new-password" textContentType="newPassword" placeholder="At least 8 characters" error={errors.password} />
+
+      {plansOn ? (
+        <View style={styles.group}>
+          <AppText variant="label">Your {ROLE_NAME[role]} plan</AppText>
+          <View style={styles.tiles}>
+            <PlanTile on={!chosenPlan} name={freePlan?.name || 'Free'} price="₹0" sub={freePlan?.tagline || 'Start free'} onPress={() => setPlanCode('')} />
+            {rolePlans
+              .filter((p) => !p.is_free)
+              .map((p) => (
+                <PlanTile
+                  key={p.code}
+                  on={chosenPlan?.code === p.code}
+                  name={p.name}
+                  star={p.recommended}
+                  price={`${formatInr(p.price_paise)}${p.billing_unit === 'project' ? '/project' : ''}${PERIOD_SHORT[p.billing_period] || ''}`}
+                  sub={p.tagline}
+                  onPress={() => setPlanCode(p.code)}
+                />
+              ))}
+          </View>
+          <Text style={styles.planNote}>
+            {!chosenPlan
+              ? `${plansQ.data && !plansQ.data.plans.length ? 'Plans could not be loaded — your account starts on Free. ' : 'Every account starts on Free. '}`
+              : role === 'buyer'
+                ? `After your account is created you go straight to secure payment for ${chosenPlan.name}. `
+                : `Your account starts on Free. Once we verify your RERA number you can pay for ${chosenPlan.name} from My plan. `}
+            <Text style={styles.link} onPress={() => router.push('/pricing')} accessibilityRole="link">
+              {chosenPlan ? 'Compare plans' : 'Compare all plans'}
+            </Text>
+          </Text>
+        </View>
+      ) : null}
       {role !== 'buyer' ? (
         <View style={styles.verify}>
           <Text style={styles.verifyText}>We verify your RERA number on the MahaRERA website before your account gets full access, usually within one working day.</Text>
@@ -191,6 +252,23 @@ export default function SignUpScreen() {
       <Button title="Create account" onPress={() => void createNow()} loading={busy} style={styles.gap} />
       <Button title="I already have an account" variant="ghost" onPress={() => router.replace('/auth/sign-in')} style={styles.gap} />
     </Screen>
+  );
+}
+
+function PlanTile({ on, name, price, sub, star, onPress }: { on: boolean; name: string; price: string; sub?: string; star?: boolean; onPress: () => void }) {
+  return (
+    <Pressable onPress={onPress} accessibilityRole="radio" accessibilityState={{ checked: on }} style={[styles.tile, on && styles.tileOn]}>
+      <Text style={[styles.tileName, on && styles.tileNameOn]}>
+        {name}
+        {star ? ' ★' : ''}
+      </Text>
+      <Text style={styles.tilePrice}>{price}</Text>
+      {sub ? (
+        <Text style={styles.tileSub} numberOfLines={2}>
+          {sub}
+        </Text>
+      ) : null}
+    </Pressable>
   );
 }
 
@@ -214,4 +292,12 @@ const styles = StyleSheet.create({
   error: { backgroundColor: colors.dangerBg, padding: 12, borderRadius: radius.md, marginTop: 12 },
   errorText: { color: colors.danger, fontFamily: fonts.medium, fontSize: 14 },
   gap: { marginTop: 10 },
+  tiles: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 10 },
+  tile: { width: '48%', flexGrow: 1, borderWidth: 1, borderColor: colors.line, borderRadius: radius.md, padding: 10, backgroundColor: '#fff', gap: 2 },
+  tileOn: { borderColor: colors.forest, borderWidth: 2, backgroundColor: colors.forestTint },
+  tileName: { fontFamily: fonts.bold, fontSize: 14, color: colors.ink },
+  tileNameOn: { color: colors.forest },
+  tilePrice: { fontFamily: fonts.semibold, fontSize: 13, color: colors.goldDeep },
+  tileSub: { fontFamily: fonts.regular, fontSize: 11.5, lineHeight: 15, color: colors.muted },
+  planNote: { fontFamily: fonts.regular, fontSize: 12.5, lineHeight: 18, color: colors.text, marginTop: 10 },
 });

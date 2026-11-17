@@ -1,6 +1,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useRef } from 'react';
 import { isAgent, isBuyer, useAuth } from '@/providers/AuthProvider';
+import { usePlanGate } from '@/providers/PlanGateProvider';
 import { getCompare, getFavorites, putCompare, putFavorites } from '@/services/account';
 import { errorMessage } from '@/services/api/errors';
 
@@ -24,6 +25,7 @@ function useSavedList(kind: Kind, enabled: boolean, onError: (msg: string) => vo
   const qc = useQueryClient();
   const key = ['me', kind];
   const query = useQuery({ queryKey: key, queryFn: API[kind].get, enabled });
+  const planGate = usePlanGate();
   const saving = useRef<Promise<void> | null>(null);
   const dirty = useRef(false);
 
@@ -42,7 +44,8 @@ function useSavedList(kind: Kind, enabled: boolean, onError: (msg: string) => vo
           const res = await API[kind].put(current.pins);
           if (!dirty.current) qc.setQueryData(['me', kind], res);
         } catch (e) {
-          onError(errorMessage(e));
+          // Not in the account's plan (Buyer plan: compare / favourites) → the plan popup.
+          if (!planGate.handle(e, kind === 'compare' ? 'Compare projects' : 'Favourites')) onError(errorMessage(e));
           dirty.current = false;
           void qc.invalidateQueries({ queryKey: ['me', kind] });
         }
@@ -52,7 +55,7 @@ function useSavedList(kind: Kind, enabled: boolean, onError: (msg: string) => vo
       saving.current = null;
     });
     return saving.current;
-  }, [kind, onError, qc]);
+  }, [kind, onError, planGate, qc]);
 
   const setPins = useCallback(
     (pins: string[]) => {
@@ -93,7 +96,8 @@ export function useCompare(onMessage: (msg: string) => void) {
 
 export function useFavorites(onMessage: (msg: string) => void) {
   const { user, status } = useAuth();
-  const list = useSavedList('favorites', status === 'signedIn' && isAgent(user), onMessage);
+  // Agents save favourites on the map; buyers see and manage theirs (website: /dashboard/buyer/favorites).
+  const list = useSavedList('favorites', status === 'signedIn' && (isAgent(user) || isBuyer(user)), onMessage);
   const toggle = useCallback(
     (id: string) => {
       if (list.pins.includes(id)) {

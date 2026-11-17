@@ -9,11 +9,11 @@ import { isFieldOn } from '@/lib/fieldVisibility';
 import { usePins } from '@/hooks/usePublicData';
 import { useProjectActions } from '@/hooks/useProjectActions';
 import { useFavorites } from '@/hooks/useSavedList';
-import { isAgent, useAuth } from '@/providers/AuthProvider';
+import { isAgent, isBuyer, useAuth } from '@/providers/AuthProvider';
 import { useToast } from '@/providers/ToastProvider';
 import type { Pin } from '@/types/models';
 
-/** An agent / channel partner's favourite projects (website: map favourites popup + /dashboard/agent/favorites). */
+/** Favourite projects of an agent / channel partner or a buyer (website: map favourites popup + /dashboard/<agent|buyer>/favorites). */
 export default function FavoritesScreen() {
   const router = useRouter();
   const toast = useToast();
@@ -22,8 +22,8 @@ export default function FavoritesScreen() {
   const favs = useFavorites(toast);
   const { enquireAbout } = useProjectActions();
 
-  if (status !== 'signedIn' || !isAgent(user)) {
-    return <EmptyState icon="heart-outline" title="Favourites are for channel-partner accounts" action={{ title: 'Sign in', onPress: () => router.push('/auth/sign-in') }} />;
+  if (status !== 'signedIn' || !(isAgent(user) || isBuyer(user))) {
+    return <EmptyState icon="heart-outline" title="Favourites are for channel-partner and buyer accounts" action={{ title: 'Sign in', onPress: () => router.push('/auth/sign-in') }} />;
   }
   if (favs.isPending || pinsQ.isPending) return <LoadingState />;
   if (favs.isError) return <ErrorState error={favs.error} onRetry={() => void favs.refetch()} />;

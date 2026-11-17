@@ -9,6 +9,8 @@ import { openUrl } from '@/lib/openLink';
 import { AppText } from '@/components/ui/AppText';
 import { Button } from '@/components/ui/Button';
 import { Screen } from '@/components/ui/Screen';
+import { PlanSummary } from '@/components/subscription/PlanSummary';
+import { useSubscriptionsEnabled } from '@/hooks/useSubscriptionsEnabled';
 import { config } from '@/constants/config';
 import { mapTiles } from '@/constants/mapTiles';
 import { EMAIL, LEGAL_PAGES, siteLink, SOCIALS, whatsappGeneralUrl, WHATSAPP_DISPLAY } from '@/constants/contact';
@@ -29,6 +31,10 @@ export default function AccountScreen() {
   const { status, user, signOut, offline, sessionEnded, refresh } = useAuth();
   const developer = status === 'signedIn' && isDeveloper(user) && !awaitingApproval(user);
   const notif = useQuery({ queryKey: ['me', 'notifications'], queryFn: getNotifications, enabled: developer });
+  // Plans & billing: buyers always; developers and channel partners once approved (website: same).
+  // Only while the website's subscription master switch is on (Super admin → Subscriptions).
+  const subsOn = useSubscriptionsEnabled();
+  const subscriber = subsOn && status === 'signedIn' && !!user && (isBuyer(user) || ((isAgent(user) || isDeveloper(user)) && !awaitingApproval(user)));
 
   const confirmSignOut = () =>
     Alert.alert('Sign out?', 'You will need to sign in again to use the live map.', [
@@ -89,9 +95,17 @@ export default function AccountScreen() {
             <>
               <Row icon="person-outline" label="My profile" onPress={() => router.push('/profile')} />
               <Row icon="git-compare-outline" label="Compare projects" onPress={() => router.push('/compare')} />
+              <Row icon="heart-outline" label="My favourites" onPress={() => router.push('/favorites')} />
+              {subsOn ? <Row icon="diamond-outline" label="Premium tools" onPress={() => router.push('/premium')} /> : null}
             </>
           ) : null}
-          {isAgent(user) && !awaitingApproval(user) ? <Row icon="heart-outline" label="My favourites" onPress={() => router.push('/favorites')} /> : null}
+          {isAgent(user) && !awaitingApproval(user) ? (
+            <>
+              <Row icon="heart-outline" label="My favourites" onPress={() => router.push('/favorites')} />
+              {subsOn ? <Row icon="people-outline" label="Leads & CRM" onPress={() => router.push('/crm')} /> : null}
+            </>
+          ) : null}
+          {subscriber ? <Row icon="ribbon-outline" label="My subscription" onPress={() => router.push('/subscription')} /> : null}
           {developer ? (
             <>
               <Row icon="business-outline" label="My projects" onPress={() => router.push('/my-projects')} />
@@ -116,6 +130,37 @@ export default function AccountScreen() {
           <Button title="Create account" variant="secondary" onPress={() => router.push('/auth/sign-up')} />
         </View>
       )}
+
+      {subscriber ? (
+        <View style={styles.planCard}>
+          <PlanSummary
+            links={
+              isBuyer(user)
+                ? [
+                    { href: '/premium', label: 'Premium tools', icon: 'diamond-outline' },
+                    { href: '/favorites', label: 'Favourites', icon: 'heart-outline' },
+                  ]
+                : isAgent(user)
+                  ? [
+                      { href: '/crm', label: 'Leads & CRM', icon: 'people-outline' },
+                      { href: '/favorites', label: 'Favourites', icon: 'heart-outline' },
+                    ]
+                  : []
+            }
+          />
+        </View>
+      ) : null}
+
+      {subsOn ? (
+        <>
+          <AppText variant="heading" style={styles.section}>
+            Plans
+          </AppText>
+          <View style={styles.card}>
+            <Row icon="pricetags-outline" label="Pricing plans" onPress={() => router.push('/pricing')} />
+          </View>
+        </>
+      ) : null}
 
       <AppText variant="heading" style={styles.section}>
         Get in touch
@@ -191,6 +236,7 @@ const styles = StyleSheet.create({
   badge: { minWidth: 22, height: 22, borderRadius: 11, backgroundColor: colors.danger, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6 },
   badgeText: { color: '#fff', fontFamily: fonts.bold, fontSize: 12 },
   signOut: { marginTop: 6 },
+  planCard: { marginTop: 14 },
   logo: { width: 180, height: 64 },
   btn: { marginTop: 6 },
   section: { marginTop: 22, marginBottom: 10 },

@@ -7,6 +7,7 @@ import { ChoicePills } from '@/components/ui/Choice';
 import { Screen } from '@/components/ui/Screen';
 import { colors, fonts, radius } from '@/constants/theme';
 import { isStaff, useAuth } from '@/providers/AuthProvider';
+import { usePlanGate } from '@/providers/PlanGateProvider';
 import { usePrefAsk } from '@/providers/PrefAskProvider';
 import { useToast } from '@/providers/ToastProvider';
 import { enquire, SITE_VISIT_SLOTS } from '@/services/account';
@@ -32,6 +33,7 @@ export default function SiteVisitScreen() {
   const router = useRouter();
   const toast = useToast();
   const prefAsk = usePrefAsk();
+  const planGate = usePlanGate();
   const { user, status } = useAuth();
   const [date, setDate] = useState('');
   const [time, setTime] = useState('');
@@ -89,7 +91,7 @@ export default function SiteVisitScreen() {
       if (isApiError(e, 'unauthorized')) {
         toast('Your session has ended. Please sign in again.');
         router.replace('/auth/sign-in');
-      } else setError(errorMessage(e));
+      } else if (!planGate.handle(e, String(title || '') || undefined)) setError(errorMessage(e));
     } finally {
       setBusy(false);
     }

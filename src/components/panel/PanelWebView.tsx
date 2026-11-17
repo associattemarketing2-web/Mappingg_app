@@ -11,6 +11,8 @@ import { bootHtml, bridgeScript, goToPath, goToTab, type PanelMode } from '@/lib
 import { useToast } from '@/providers/ToastProvider';
 import { ApiError } from '@/services/api/errors';
 import { copyText } from '@/lib/clipboard';
+import { appRouteForSitePath } from '@/services/subscriptions';
+import type { Href } from 'expo-router';
 
 // One of the website's panels (super-admin, developer panel, map editor,
 // projects intake) inside the app. The page is the website's own, so every
@@ -58,6 +60,8 @@ interface Props {
   onOpenProject?(slug: string): void;
   /** The logo / a link to the website's home page was tapped: show the app's home. */
   onHome?(): void;
+  /** A link to an account page the app has its own screen for (subscription, invoices, pricing…). */
+  onAppRoute?(href: Href): void;
 }
 
 // react-native-webview 14.0.1 types its class as Component<Props & undefined>,
@@ -82,7 +86,7 @@ function parse(url: string): URL | null {
 }
 
 export const PanelWebView = forwardRef<PanelWebViewHandle, Props>(function PanelWebView(props, ref) {
-  const { path, mode, token, email, onShell, onSignedOut, onOpenMap, onOpenIntake, onOpenProject, onHome } = props;
+  const { path, mode, token, email, onShell, onSignedOut, onOpenMap, onOpenIntake, onOpenProject, onHome, onAppRoute } = props;
   const toast = useToast();
   const web = useRef<WebViewRef>(null);
   const canGoBack = useRef(false);
@@ -144,6 +148,12 @@ export const PanelWebView = forwardRef<PanelWebViewHandle, Props>(function Panel
         onOpenIntake(u.hash);
         return;
       }
+      // Plans, checkout and invoices open the app's own screens (payments use the native checkout).
+      const appRoute = ours && onAppRoute ? appRouteForSitePath(u.pathname, u.search) : null;
+      if (appRoute) {
+        onAppRoute!(appRoute);
+        return;
+      }
       const project = ours ? /^\/projects\/([^/]+)\/?$/.exec(u.pathname) : null;
       if (project && onOpenProject) {
         onOpenProject(decodeURIComponent(project[1]!));
@@ -159,7 +169,7 @@ export const PanelWebView = forwardRef<PanelWebViewHandle, Props>(function Panel
       }
       void Linking.openURL(url).catch(() => toast('No app on this phone can open that link.'));
     },
-    [onHome, onOpenIntake, onOpenMap, onOpenProject, toast],
+    [onAppRoute, onHome, onOpenIntake, onOpenMap, onOpenProject, toast],
   );
 
   const saveDownload = useCallback(
@@ -250,6 +260,11 @@ export const PanelWebView = forwardRef<PanelWebViewHandle, Props>(function Panel
       if (ours) {
         // The boot page itself (baseUrl) and every panel page stay in the WebView.
         if (!booted.current && url === `${ORIGIN}/`) return true;
+        // …except account pages the app shows itself (subscription, invoices, pricing).
+        if (onAppRoute && appRouteForSitePath(u.pathname, u.search)) {
+          openExternal(url);
+          return false;
+        }
         if (PANEL_PATHS.test(u.pathname)) {
           booted.current = true;
           return true;
@@ -263,7 +278,7 @@ export const PanelWebView = forwardRef<PanelWebViewHandle, Props>(function Panel
       openExternal(url);
       return false;
     },
-    [onSignedOut, openExternal],
+    [onAppRoute, onSignedOut, openExternal],
   );
 
   if (failed) {

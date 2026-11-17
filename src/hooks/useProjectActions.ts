@@ -3,6 +3,7 @@ import { useCallback, useState } from 'react';
 import { Share } from 'react-native';
 import { config } from '@/constants/config';
 import { isStaff, useAuth } from '@/providers/AuthProvider';
+import { usePlanGate } from '@/providers/PlanGateProvider';
 import { useToast } from '@/providers/ToastProvider';
 import { enquire } from '@/services/account';
 import { errorMessage, isApiError } from '@/services/api/errors';
@@ -16,6 +17,7 @@ export function useProjectActions() {
   const router = useRouter();
   const toast = useToast();
   const { user, status } = useAuth();
+  const planGate = usePlanGate();
   const [busyId, setBusyId] = useState<string | null>(null);
 
   /**
@@ -56,6 +58,8 @@ export function useProjectActions() {
         if (isApiError(e, 'unauthorized')) {
           toast('Your session has ended. Please sign in again.');
           router.push('/auth/sign-in');
+        } else if (planGate.handle(e, pin.title)) {
+          // Over the plan's limit: the "Plan limit" popup offers the upgrade (website: showPlanGate).
         } else {
           toast(errorMessage(e));
         }
@@ -63,7 +67,7 @@ export function useProjectActions() {
         setBusyId(null);
       }
     },
-    [busyId, router, status, toast, user],
+    [busyId, planGate, router, status, toast, user],
   );
 
   const share = useCallback(async (pin: Pin) => {

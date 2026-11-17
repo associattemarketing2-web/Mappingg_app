@@ -9,6 +9,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { colors, fonts } from '@/constants/theme';
 import { AuthProvider } from '@/providers/AuthProvider';
 import { GuestGateProvider } from '@/providers/GuestGateProvider';
+import { PlanGateProvider } from '@/providers/PlanGateProvider';
 import { PrefAskProvider } from '@/providers/PrefAskProvider';
 import { QueryProvider } from '@/providers/QueryProvider';
 import { ToastProvider } from '@/providers/ToastProvider';
@@ -44,6 +45,7 @@ export default function RootLayout() {
           <ToastProvider>
             <GuestGateProvider>
             <PrefAskProvider>
+            <PlanGateProvider>
               <StatusBar style="dark" />
               <Stack
                 screenOptions={{
@@ -74,9 +76,16 @@ export default function RootLayout() {
                 <Stack.Screen name="my-projects/edit" options={{ title: 'Project', presentation: 'modal' }} />
                 <Stack.Screen name="notifications" options={{ title: 'Notifications' }} />
                 <Stack.Screen name="contact" options={{ title: 'Contact us' }} />
+                <Stack.Screen name="subscription/index" options={{ title: 'My subscription' }} />
+                <Stack.Screen name="subscription/checkout" options={{ title: 'Checkout', presentation: 'modal' }} />
+                <Stack.Screen name="subscription/invoice/[id]" options={{ title: 'Invoice' }} />
+                <Stack.Screen name="pricing" options={{ title: 'Pricing plans' }} />
+                <Stack.Screen name="crm" options={{ title: 'Leads & CRM' }} />
+                <Stack.Screen name="premium" options={{ title: 'Premium tools' }} />
                 <Stack.Screen name="delete-account" options={{ title: 'Delete account', presentation: 'modal' }} />
                 <Stack.Screen name="+not-found" options={{ title: 'Not found' }} />
               </Stack>
+            </PlanGateProvider>
             </PrefAskProvider>
             </GuestGateProvider>
           </ToastProvider>

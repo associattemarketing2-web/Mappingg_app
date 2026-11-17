@@ -81,6 +81,8 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     infoPlist: {
       NSLocationWhenInUseUsageDescription: LOCATION_REASON,
       ITSAppUsesNonExemptEncryption: false,
+      // Razorpay checkout (subscriptions): lets it open the phone's UPI apps.
+      LSApplicationQueriesSchemes: ['tez', 'phonepe', 'paytmmp', 'credpay', 'bhim'],
     },
   },
   android: {
@@ -123,7 +125,22 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       { image: './assets/splash-icon.png', imageWidth: 160, resizeMode: 'contain', backgroundColor: '#ffffff' },
     ],
     '@maplibre/maplibre-react-native',
-    ['expo-build-properties', { android: { usesCleartextTraffic: allowCleartext } }],
+    [
+      'expo-build-properties',
+      {
+        android: {
+          usesCleartextTraffic: allowCleartext,
+          // Razorpay's native checkout (react-native-razorpay README → Proguard Rules), in case minification is turned on.
+          extraProguardRules: [
+            '-keepattributes *Annotation*',
+            '-dontwarn com.razorpay.**',
+            '-keep class com.razorpay.** {*;}',
+            '-optimizations !method/inlining/',
+            '-keepclasseswithmembers class * { public void onPayment*(...); }',
+          ].join('\n'),
+        },
+      },
+    ],
   ],
   experiments: { typedRoutes: true },
   extra: {
