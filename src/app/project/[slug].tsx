@@ -25,7 +25,8 @@ import { localitiesOf } from '@/lib/locality';
 import { projectFaqs, projectSummary, publicFacts } from '@/lib/projectMeta';
 import { reraRegistry } from '@/lib/rera';
 import { slugify } from '@/lib/slug';
-import { youtubeId, youtubeThumb, youtubeWatchUrl } from '@/lib/youtube';
+import { youtubeId } from '@/lib/youtube';
+import { YouTubePlayer } from '@/components/YouTubePlayer';
 import { findPinBySlug, usePins, useQuickView } from '@/hooks/usePublicData';
 import { projectShareUrl, useProjectActions } from '@/hooks/useProjectActions';
 import { useCompare, useFavorites } from '@/hooks/useSavedList';
@@ -366,12 +367,7 @@ function ProjectBody({
 
       {vid ? (
         <Section title="Project walkthrough">
-          <Pressable onPress={() => void openUrl(youtubeWatchUrl(vid))} accessibilityRole="link" accessibilityLabel={`Watch the ${pin.title} walkthrough on YouTube`}>
-            <Image source={{ uri: youtubeThumb(vid) }} style={styles.video} contentFit="cover" />
-            <View style={styles.play}>
-              <Ionicons name="play" size={28} color="#fff" />
-            </View>
-          </Pressable>
+          <YouTubePlayer key={vid} id={vid} title={pin.title} />
         </Section>
       ) : null}
 
@@ -577,8 +573,6 @@ const styles = StyleSheet.create({
   body: { flex: 1, fontFamily: fonts.regular, fontSize: 15, lineHeight: 23, color: colors.text },
   bullet: { flexDirection: 'row', gap: 8, marginBottom: 6 },
   bulletDot: { fontFamily: fonts.bold, fontSize: 15, color: colors.park },
-  video: { width: '100%', aspectRatio: 16 / 9, borderRadius: radius.md, backgroundColor: '#000' },
-  play: { position: 'absolute', top: '40%', alignSelf: 'center', width: 58, height: 58, borderRadius: 29, backgroundColor: 'rgba(0,0,0,0.55)', alignItems: 'center', justifyContent: 'center' },
   spec: { flexDirection: 'row', justifyContent: 'space-between', gap: 12, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: colors.line },
   specK: { fontFamily: fonts.medium, fontSize: 14, color: colors.muted, flexShrink: 0, maxWidth: '45%' },
   specV: { flex: 1, textAlign: 'right', fontFamily: fonts.semibold, fontSize: 14, color: colors.ink },

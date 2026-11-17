@@ -10,10 +10,11 @@ import { whatsappProjectUrl } from '@/constants/contact';
 import { mapStatusLabel } from '@/constants/status';
 import { colors, fonts, radius, shadow, TOUCH } from '@/constants/theme';
 import { isFieldOn, shown, visibleCustomFields } from '@/lib/fieldVisibility';
-import { youtubeId, youtubeThumb, youtubeWatchUrl } from '@/lib/youtube';
+import { youtubeId } from '@/lib/youtube';
 import { withWidth } from '@/services/publicData';
 import type { Pin } from '@/types/models';
 import { Chip, Logo, StatusBadge } from '../ProjectBits';
+import { YouTubePlayer } from '../YouTubePlayer';
 
 // The project card that opens when a pin is tapped — the website's map
 // "teaser card": logo + name, developer / location / status / type, then the
@@ -88,20 +89,10 @@ export function PinSheet({ pin, onClose, onEnquire, onShare, onDetails, compare,
         ) : null}
 
         {vid ? (
-          <Pressable
-            onPress={() => openUrl(youtubeWatchUrl(vid))}
-            accessibilityRole="link"
-            accessibilityLabel="Watch the project video on YouTube"
-            style={styles.media}
-          >
+          <View style={styles.media}>
             <Text style={styles.mediaLabel}>PROJECT VIDEO</Text>
-            <View>
-              <Image source={{ uri: youtubeThumb(vid) }} style={styles.mediaImg} contentFit="cover" />
-              <View style={styles.play}>
-                <Ionicons name="play" size={26} color="#fff" />
-              </View>
-            </View>
-          </Pressable>
+            <YouTubePlayer key={vid} id={vid} title={pin.title} />
+          </View>
         ) : pin.brochureImage ? (
           <View style={styles.media}>
             <Text style={styles.mediaLabel}>PROJECT BROCHURE</Text>
@@ -192,17 +183,6 @@ const styles = StyleSheet.create({
   media: { marginTop: 14 },
   mediaLabel: { fontFamily: fonts.bold, fontSize: 11, letterSpacing: 1, color: colors.goldDeep, marginBottom: 6 },
   mediaImg: { width: '100%', aspectRatio: 16 / 9, borderRadius: radius.md, backgroundColor: '#000' },
-  play: {
-    position: 'absolute',
-    alignSelf: 'center',
-    top: '38%',
-    width: 54,
-    height: 54,
-    borderRadius: 27,
-    backgroundColor: 'rgba(0,0,0,0.55)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   actions: {
     flexDirection: 'row',
     flexWrap: 'wrap',

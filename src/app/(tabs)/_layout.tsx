@@ -1,7 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
-import { StyleSheet, View, type ColorValue } from 'react-native';
+import { useEffect } from 'react';
+import { Platform, StyleSheet, View, type ColorValue } from 'react-native';
 import { colors, fonts } from '@/constants/theme';
+import { usePins } from '@/hooks/usePublicData';
+import { loadLogos, pinLogoUrls } from '@/services/logoCache';
+import { hasCoords } from '@/services/publicData';
 
 type IconName = keyof typeof Ionicons.glyphMap;
 
@@ -16,8 +20,22 @@ function icon(on: IconName, off: IconName) {
   };
 }
 
+/** Starts saving the map's pin logos soon after launch, so the live map opens
+ *  with them already on the phone instead of filling them in one by one. */
+function PinLogoWarmup() {
+  const { data } = usePins();
+  useEffect(() => {
+    if (Platform.OS === 'web' || !data?.length) return;
+    const t = setTimeout(() => void loadLogos(pinLogoUrls(data.filter(hasCoords), 73.914, 18.5215)), 1200);
+    return () => clearTimeout(t);
+  }, [data]);
+  return null;
+}
+
 export default function TabsLayout() {
   return (
+    <>
+    <PinLogoWarmup />
     <Tabs
       screenOptions={{
         tabBarActiveTintColor: colors.forest,
@@ -38,6 +56,7 @@ export default function TabsLayout() {
         options={{ title: 'More', headerTitle: 'Profile & more', tabBarIcon: icon('ellipsis-horizontal', 'ellipsis-horizontal'), tabBarAccessibilityLabel: 'Profile, settings and more' }}
       />
     </Tabs>
+    </>
   );
 }
 

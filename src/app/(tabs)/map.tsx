@@ -295,7 +295,7 @@ export function LiveMapScreen({ onBack }: { onBack?: () => void }) {
         selectedId={selected?.id ?? null}
         pulseId={pulseId}
         me={me}
-        animate={focused}
+        animate={focused && !selected}
         onPinPress={(p) => openPin(p, false)}
         onInfraPress={(item) => {
           setSelected(null);

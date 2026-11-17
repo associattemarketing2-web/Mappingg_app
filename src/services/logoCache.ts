@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Directory, File, Paths } from 'expo-file-system';
 import { Image as RNImage } from 'react-native';
+import { withWidth } from '@/services/publicData';
 
 // Pin logos for the live map, saved on the phone. Each logo is downloaded once
 // (small 96px copy), its size is remembered, and on the next launch every logo
@@ -13,7 +14,7 @@ export interface CachedLogo {
 }
 
 const DIMS_KEY = 'mappingg.logoDims.v1';
-const PARALLEL = 6;
+const PARALLEL = 10;
 
 let dir: Directory | null = null;
 function logoDir(): Directory | null {
@@ -62,25 +63,6 @@ function saveDimsSoon() {
 const sizeOf = (uri: string) =>
   new Promise<{ w: number; h: number }>((resolve, reject) => RNImage.getSize(uri, (w, h) => resolve({ w, h }), reject));
 
-/** Logos already on the phone — available immediately (used for the first paint). */
-export async function cachedLogos(urls: string[]): Promise<Record<string, CachedLogo>> {
-  const d = await loadDims();
-  const folder = logoDir();
-  const out: Record<string, CachedLogo> = {};
-  if (!folder) return out;
-  for (const url of urls) {
-    const size = d[url];
-    if (!size) continue;
-    try {
-      const f = new File(folder, fileName(url));
-      if (f.exists) out[url] = { uri: f.uri, ...size };
-    } catch {
-      /* fetch it again below */
-    }
-  }
-  return out;
-}
-
 async function fetchOne(url: string): Promise<CachedLogo | null> {
   const folder = logoDir();
   try {
@@ -101,41 +83,113 @@ async function fetchOne(url: string): Promise<CachedLogo | null> {
   }
 }
 
-/**
- * Downloads the logos that aren't on the phone yet, a few at a time, in the
- * given order (closest to the map's centre first). `onBatch` gets the logos
- * that became ready, grouped so the map isn't redrawn for every single one.
- */
-export function fetchLogos(urls: string[], onBatch: (ready: Record<string, CachedLogo>) => void): () => void {
-  let cancelled = false;
-  let next = 0;
-  let batch: Record<string, CachedLogo> = {};
-  let timer: ReturnType<typeof setTimeout> | null = null;
-  const flush = () => {
-    timer = null;
-    if (cancelled || !Object.keys(batch).length) return;
-    const ready = batch;
-    batch = {};
-    onBatch(ready);
-  };
-  const worker = async () => {
-    await loadDims();
-    while (!cancelled && next < urls.length) {
-      const url = urls[next++]!;
-      const logo = await fetchOne(url);
-      if (cancelled) return;
+// ---- one shared store for the whole app --------------------------------------
+// Every logo that is ready (saved on the phone or just downloaded) lives here,
+// so re-opening the map shows all logos at once and downloads started anywhere
+// (app start, the map) are never repeated. New logos are handed to the map in
+// groups (first ones quickly, then about once a second), so the pins aren't
+// rebuilt for every single download.
+
+let ready: Record<string, CachedLogo> = {};
+const listeners = new Set<() => void>();
+const queued = new Set<string>(); // waiting or downloading
+let queue: string[] = [];
+let active = 0;
+let pending: Record<string, CachedLogo> = {};
+let flushTimer: ReturnType<typeof setTimeout> | null = null;
+let flushes = 0;
+
+function publish(add: Record<string, CachedLogo>) {
+  ready = { ...ready, ...add };
+  listeners.forEach((l) => l());
+}
+
+function scheduleFlush() {
+  if (flushTimer) return;
+  flushTimer = setTimeout(
+    () => {
+      flushTimer = null;
+      flushes++;
+      const add = pending;
+      pending = {};
+      if (Object.keys(add).length) publish(add);
+    },
+    flushes < 2 ? 200 : 900,
+  );
+}
+
+function pump() {
+  while (active < PARALLEL && queue.length) {
+    const url = queue.shift()!;
+    active++;
+    void fetchOne(url).then((logo) => {
+      active--;
+      queued.delete(url);
       if (logo) {
-        batch[url] = logo;
-        timer ??= setTimeout(flush, 250);
+        pending[url] = logo;
+        scheduleFlush();
+      }
+      pump();
+    });
+  }
+}
+
+/** Every logo ready so far (a new object whenever more arrive). */
+export const readyLogos = () => ready;
+
+/** Called whenever more logos are ready. Returns an unsubscribe. */
+export function subscribeLogos(listener: () => void): () => void {
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
+}
+
+/**
+ * Makes these logos ready: saved ones at once, the rest downloaded in the
+ * background (in the given order, ahead of anything queued earlier).
+ */
+export async function loadLogos(urls: string[]): Promise<void> {
+  const d = await loadDims();
+  const folder = logoDir();
+  const saved: Record<string, CachedLogo> = {};
+  const missing: string[] = [];
+  for (const url of urls) {
+    if (ready[url] || saved[url] || queued.has(url)) continue;
+    const size = d[url];
+    if (size && folder) {
+      try {
+        const f = new File(folder, fileName(url));
+        if (f.exists) {
+          saved[url] = { uri: f.uri, ...size };
+          continue;
+        }
+      } catch {
+        /* download it again */
       }
     }
-  };
-  void Promise.all(Array.from({ length: PARALLEL }, worker)).then(() => {
-    if (timer) clearTimeout(timer);
-    flush();
-  });
-  return () => {
-    cancelled = true;
-    if (timer) clearTimeout(timer);
-  };
+    queued.add(url);
+    missing.push(url);
+  }
+  if (Object.keys(saved).length) publish(saved);
+  if (missing.length) {
+    queue = [...missing, ...queue.filter((u) => !missing.includes(u))];
+    pump();
+  }
+}
+
+/** The small logo shown on a pin's face. */
+export const pinLogoUrl = (image: string | null | undefined) => withWidth(image, 96);
+
+/** Logo URLs of these pins (each once), nearest to the point first. */
+export function pinLogoUrls(pins: { image: string | null; lat: number; lng: number }[], lng: number, lat: number): string[] {
+  const best = new Map<string, number>();
+  for (const p of pins) {
+    const u = pinLogoUrl(p.image);
+    if (!u) continue;
+    const d = (p.lng - lng) ** 2 + (p.lat - lat) ** 2;
+    const prev = best.get(u);
+    if (prev === undefined || d < prev) best.set(u, d);
+  }
+  return [...best.entries()].sort((a, b) => a[1] - b[1]).map(([u]) => u);
 }

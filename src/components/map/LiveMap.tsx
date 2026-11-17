@@ -11,7 +11,7 @@ import {
   type CameraRef,
   type StyleSpecification,
 } from '@maplibre/maplibre-react-native';
-import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
+import { forwardRef, memo, useEffect, useImperativeHandle, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import ExpoConstants from 'expo-constants';
 import { BUILT_IN_INFRA, INFRA_SIZES, isBridgeLike, type InfraTypeMeta } from '@/constants/infra';
@@ -21,8 +21,7 @@ import { openUrl } from '@/lib/openLink';
 import { asPinStatus, statusColor } from '@/constants/status';
 import { colors } from '@/constants/theme';
 import type { Bounds } from '@/lib/geo';
-import { cachedLogos, fetchLogos, logoKey, type CachedLogo } from '@/services/logoCache';
-import { withWidth } from '@/services/publicData';
+import { loadLogos, logoKey, pinLogoUrl, pinLogoUrls, readyLogos, subscribeLogos } from '@/services/logoCache';
 import type { InfraMarker, InfraTypeRow, Pin, Road } from '@/types/models';
 
 // The native live map (MapLibre). Same tiles as the website: OpenStreetMap for
@@ -115,8 +114,26 @@ const BASE_STYLE: StyleSpecification = {
   layers: [{ id: 'paper', type: 'background', paint: { 'background-color': '#f6f4ef' } }],
 };
 
-export const LiveMap = forwardRef<LiveMapHandle, Props>(function LiveMap(props, ref) {
-  const { pins, infra, roads, infraTypes, boundary, basemap, selectedId, pulseId, me, animate = true } = props;
+const LiveMapInner = forwardRef<LiveMapHandle, Props>(function LiveMap(latest, ref) {
+  // Callbacks are read from a ref, so a new callback from the screen never
+  // redraws the map (see the memo below).
+  const propsRef = useRef(latest);
+  useEffect(() => {
+    propsRef.current = latest;
+  });
+  const props = useMemo(
+    () => ({
+      onPinPress: (p: Pin) => propsRef.current.onPinPress(p),
+      onInfraPress: (m: InfraMarker) => propsRef.current.onInfraPress(m),
+      onRoadPress: (r: Road) => propsRef.current.onRoadPress(r),
+      onMapPress: () => propsRef.current.onMapPress(),
+      onReady: () => propsRef.current.onReady?.(),
+      onLoadError: () => propsRef.current.onLoadError?.(),
+    }),
+    [],
+  );
+  const [moving, setMoving] = useState(false);
+  const { pins, infra, roads, infraTypes, boundary, basemap, selectedId, pulseId, me, animate = true } = latest;
   const camera = useRef<CameraRef>(null);
   const zoom = useRef(START.zoom);
   const center = useRef<[number, number]>([START.lng, START.lat]);
@@ -143,42 +160,18 @@ export const LiveMap = forwardRef<LiveMapHandle, Props>(function LiveMap(props, 
   const logoUrlOf = useMemo(() => {
     const m = new Map<string, string>();
     for (const p of pins) {
-      const u = withWidth(p.image, 96);
+      const u = pinLogoUrl(p.image);
       if (u) m.set(p.id, u);
     }
     return m;
   }, [pins]);
-  const [logos, setLogos] = useState<Record<string, CachedLogo>>({});
-  const logosRef = useRef(logos);
+  // Shared with the rest of the app (services/logoCache), so logos already
+  // fetched — at app start or on an earlier visit — show on the first frame.
+  const logos = useSyncExternalStore(subscribeLogos, readyLogos);
   useEffect(() => {
-    logosRef.current = logos;
-  }, [logos]);
-  useEffect(() => {
-    let stop: (() => void) | null = null;
-    let cancelled = false;
     const [cx, cy] = center.current;
-    const firstPin = new Map<string, Pin>();
-    for (const p of pins) {
-      const u = logoUrlOf.get(p.id);
-      if (u && !firstPin.has(u)) firstPin.set(u, p);
-    }
-    const dist = (u: string) => {
-      const p = firstPin.get(u)!;
-      return (p.lng - cx) ** 2 + (p.lat - cy) ** 2;
-    };
-    const urls = [...firstPin.keys()].filter((u) => !logosRef.current[u]).sort((a, b) => dist(a) - dist(b));
-    if (!urls.length) return;
-    void cachedLogos(urls).then((saved) => {
-      if (cancelled) return;
-      if (Object.keys(saved).length) setLogos((prev) => ({ ...prev, ...saved }));
-      const missing = urls.filter((u) => !saved[u]);
-      if (missing.length) stop = fetchLogos(missing, (ready) => setLogos((prev) => ({ ...prev, ...ready })));
-    });
-    return () => {
-      cancelled = true;
-      stop?.();
-    };
-  }, [pins, logoUrlOf]);
+    void loadLogos(pinLogoUrls(pins, cx, cy));
+  }, [pins]);
 
   const allImages = useMemo(() => {
     const out: Record<string, string | number> = { ...PIN_IMAGES };
@@ -269,9 +262,11 @@ export const LiveMap = forwardRef<LiveMapHandle, Props>(function LiveMap(props, 
       touchPitch={false}
       onDidFinishLoadingMap={() => props.onReady?.()}
       onDidFailLoadingMap={() => props.onLoadError?.()}
+      onRegionWillChange={() => setMoving(true)}
       onRegionDidChange={(e) => {
         zoom.current = e.nativeEvent.zoom;
         center.current = e.nativeEvent.center;
+        setMoving(false);
       }}
       onPress={() => {
         // A pin / road tap also reaches the map; ignore that one.
@@ -373,7 +368,8 @@ export const LiveMap = forwardRef<LiveMapHandle, Props>(function LiveMap(props, 
       >
         {/* Rings drawn around the pin's round head (30pt above the tip, scaled per
             pin size). circle-translate can't vary per pin, so one layer per size. */}
-        {anyHighlighted ? <RadarLayers animate={animate} /> : null}
+        {/* Paused while the map moves, so panning and zooming stay smooth. */}
+        {anyHighlighted ? <RadarLayers animate={animate && !moving} /> : null}
         {PIN_SIZES.map((size) => {
           const s = PIN_SCALE[size];
           const lift: [number, number] = [0, -HEAD_Y * s];
@@ -474,6 +470,24 @@ export const LiveMap = forwardRef<LiveMapHandle, Props>(function LiveMap(props, 
   );
 });
 
+const sameArray = <T,>(a: T[], b: T[]) => a === b || (a.length === b.length && a.every((x, i) => x === b[i]));
+
+/** Redraws only when what's on the map changes — not for new callbacks. */
+export const LiveMap = memo(
+  LiveMapInner,
+  (a, b) =>
+    sameArray(a.pins, b.pins) &&
+    a.infra === b.infra &&
+    a.roads === b.roads &&
+    a.infraTypes === b.infraTypes &&
+    a.boundary === b.boundary &&
+    a.basemap === b.basemap &&
+    a.selectedId === b.selectedId &&
+    a.pulseId === b.pulseId &&
+    a.me === b.me &&
+    a.animate === b.animate,
+);
+
 /** The website's pulsing radar ring on highlighted pins: grows from 0.6x to
  * 2.6x of the 28pt head while fading out, every 1.6s. Own state, so only these
  * layers update on each tick. */
@@ -487,7 +501,7 @@ function RadarLayers({ animate }: { animate: boolean }) {
       const t = ((Date.now() - started) % 1600) / 1600;
       const eased = 1 - (1 - t) * (1 - t);
       setRadar({ radius: 14 * (0.6 + 2 * eased), opacity: 0.9 * (1 - eased) });
-    }, 80);
+    }, 100);
     return () => clearInterval(timer);
   }, [animate]);
   return (
