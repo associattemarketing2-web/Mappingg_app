@@ -6,7 +6,7 @@ import { Alert, FlatList, Keyboard, Linking, Pressable, StyleSheet, Text, View }
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { InfoSheet } from '@/components/map/InfoSheet';
 import { MapGate } from '@/components/map/MapGate';
-import { Legend, SearchBar, SideButtons, Toolbar } from '@/components/map/MapControls';
+import { Legend, SearchBar, SearchStatus, SideButtons, Toolbar, type SearchStatusInfo } from '@/components/map/MapControls';
 import { nativeMapAvailable } from '@/components/map/nativeMap';
 import { PinSheet } from '@/components/map/PinSheet';
 import { ProjectCard } from '@/components/ProjectCard';
@@ -17,7 +17,7 @@ import { BUILT_IN_INFRA } from '@/constants/infra';
 import { colors, fonts, radius, shadow } from '@/constants/theme';
 import { withTimeout } from '@/lib/async';
 import { boundsOf, haversineKm } from '@/lib/geo';
-import { buildSuggestions, interpretQuery, matchSuggestions, MUNDHWA, pinsInArea, type Suggestion } from '@/lib/search';
+import { buildSuggestions, matchSuggestions, MUNDHWA, searchMap, type Suggestion } from '@/lib/search';
 import { useMapData, usePins } from '@/hooks/usePublicData';
 import { useProjectActions } from '@/hooks/useProjectActions';
 import { useCompare, useFavorites } from '@/hooks/useSavedList';
@@ -68,6 +68,7 @@ export function LiveMapScreen({ onBack }: { onBack?: () => void }) {
   const [query, setQuery] = useState('');
   const [suggestOpen, setSuggestOpen] = useState(false);
   const [visibleIds, setVisibleIds] = useState<Set<string> | null>(null);
+  const [searchStatus, setSearchStatus] = useState<SearchStatusInfo | null>(null);
   const [selected, setSelected] = useState<Pin | null>(null);
   const [info, setInfo] = useState<{ kind: 'infra'; item: InfraMarker } | { kind: 'road'; item: Road } | null>(null);
   const [me, setMe] = useState<{ lat: number; lng: number } | null>(null);
@@ -101,6 +102,7 @@ export function LiveMapScreen({ onBack }: { onBack?: () => void }) {
     (lat: number, lng: number) => {
       setMe({ lat, lng });
       setVisibleIds(null);
+      setSearchStatus(null);
       const nearby = allPins
         .map((p) => ({ p, d: haversineKm(lat, lng, p.lat, p.lng) }))
         .filter((x) => x.d <= NEAR_ME_KM)
@@ -194,48 +196,50 @@ export function LiveMapScreen({ onBack }: { onBack?: () => void }) {
     return () => clearTimeout(t);
   }, [allPins, mapReady, openPin, params.pin]);
 
-  const focusArea = useCallback(
-    (area: AreaBoundary | null) => {
-      setVisibleIds(null);
-      if (!area) {
-        map.current?.flyTo(MUNDHWA.lat, MUNDHWA.lng, MUNDHWA.zoom);
-        const company = allPins.find((p) => p.number === 1) || allPins.find((p) => p.title.toLowerCase().includes('associatte'));
-        if (company) setTimeout(() => pulse(company.id), 900);
-        toast('📍 Mundhwa, Pune');
-        return;
+  /** Shows a place with no projects yet: its drawn boundary, else its centre. */
+  const showPlace = useCallback((area: AreaBoundary | null) => {
+    if (!area) return map.current?.flyTo(MUNDHWA.lat, MUNDHWA.lng, MUNDHWA.zoom);
+    const b = area.boundary && area.boundary.length > 1 ? boundsOf(area.boundary.map(([lat, lng]) => ({ lat, lng }))) : null;
+    if (b) map.current?.fitBounds(b, 50);
+    else if (area.fallbackLat != null && area.fallbackLng != null) map.current?.flyTo(area.fallbackLat, area.fallbackLng, area.fallbackZoom);
+  }, []);
+
+  /** Runs a search: only the matching pins stay on the map, and a line under
+   *  the search bar says what was found (or that nothing is there yet).
+   *  Returns the single project the query names, if any. */
+  const applyQuery = useCallback(
+    (raw: string): Pin | null => {
+      const out = searchMap(raw, allPins, areas, boundary);
+      if (out.kind === 'all') {
+        setVisibleIds(null);
+        setSearchStatus(null);
+        return null;
       }
-      const inArea = pinsInArea(area, allPins, boundary);
-      if (inArea.length) {
-        const b = boundsOf(inArea);
+      if (out.kind === 'none') {
+        // Keep every pin on the map so it never looks empty or broken.
+        setVisibleIds(null);
+        setSearchStatus({ kind: 'none', query: raw.trim(), place: out.place });
+        if (out.area !== undefined) showPlace(out.area);
+        return null;
+      }
+      setVisibleIds(new Set(out.pins.map((p) => p.id)));
+      setSearchStatus({ kind: 'results', query: raw.trim(), place: out.place, count: out.pins.length, project: out.project?.title ?? null });
+      setSelected((cur) => (cur && out.pins.some((p) => p.id === cur.id) ? cur : null));
+      if (out.project) map.current?.flyTo(out.project.lat, out.project.lng, 16);
+      else {
+        const b = boundsOf(out.pins);
         if (b) map.current?.fitBounds(b, 70);
-        toast(`📍 ${area.label} — ${inArea.length} project${inArea.length > 1 ? 's' : ''}`);
-      } else if (area.boundary) {
-        const b = boundsOf(area.boundary.map(([lat, lng]) => ({ lat, lng })));
-        if (b) map.current?.fitBounds(b, 50);
-        toast(`📍 ${area.label} — no projects added yet`);
-      } else if (area.fallbackLat != null && area.fallbackLng != null) {
-        map.current?.flyTo(area.fallbackLat, area.fallbackLng, area.fallbackZoom);
-        toast(`📍 ${area.label} — no projects added yet`);
       }
+      return out.project;
     },
-    [allPins, boundary, pulse, toast],
+    [allPins, areas, boundary, showPlace],
   );
 
-  const applyQuery = useCallback(
-    (raw: string) => {
-      const out = interpretQuery(raw, allPins, areas);
-      if (out.kind === 'mundhwa') return focusArea(null);
-      if (out.kind === 'area') return focusArea(out.area);
-      setVisibleIds(out.ids);
-      if (out.ids && out.ids.size) {
-        const b = boundsOf(allPins.filter((p) => out.ids!.has(p.id)));
-        if (b) map.current?.fitBounds(b, 70);
-      } else if (out.ids && raw.trim()) {
-        toast('No projects match your search');
-      }
-    },
-    [allPins, areas, focusArea, toast],
-  );
+  const clearSearch = useCallback(() => {
+    setQuery('');
+    setSuggestOpen(false);
+    applyQuery('');
+  }, [applyQuery]);
 
   // Typing filters after a short pause; clearing restores every pin at once.
   const typingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -258,9 +262,23 @@ export function LiveMapScreen({ onBack }: { onBack?: () => void }) {
     setQuery(s.label);
     setSuggestOpen(false);
     Keyboard.dismiss();
-    if (s.type === 'Area') return focusArea(s.area);
-    applyQuery(s.label);
-    if (s.type === 'Project') setTimeout(() => openPin(s.pin), 300);
+    if (s.type === 'Project') {
+      setVisibleIds(new Set([s.pin.id]));
+      setSearchStatus({ kind: 'results', query: s.label, place: null, count: 1, project: s.pin.title });
+      map.current?.flyTo(s.pin.lat, s.pin.lng, 16);
+      setTimeout(() => openPin(s.pin, false), 300);
+      return;
+    }
+    applyQuery(s.type === 'Area' && !s.area ? 'mundhwa' : s.label);
+  };
+
+  // The keyboard's search key: search now; a single named project opens its card.
+  const submit = () => {
+    if (typingTimer.current) clearTimeout(typingTimer.current);
+    setSuggestOpen(false);
+    Keyboard.dismiss();
+    const project = applyQuery(query);
+    if (project) setTimeout(() => openPin(project, false), 300);
   };
 
   const buyer = isBuyer(user);
@@ -327,16 +345,14 @@ export function LiveMapScreen({ onBack }: { onBack?: () => void }) {
             onChange={onType}
             suggestions={suggestions}
             onPick={pick}
-            onClear={() => {
-              setQuery('');
-              setSuggestOpen(false);
-              applyQuery('');
-            }}
+            onSubmit={submit}
+            onClear={clearSearch}
           />
           </View>
           </View>
           {!suggestions.length ? (
             <>
+              {searchStatus ? <SearchStatus info={searchStatus} onClear={clearSearch} /> : null}
               <Toolbar
                 basemap={basemap}
                 onBasemap={() => setBasemap((b) => (b === 'map' ? 'satellite' : b === 'satellite' ? 'night' : 'map'))}

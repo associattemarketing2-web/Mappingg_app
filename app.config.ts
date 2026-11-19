@@ -37,8 +37,8 @@ const ids = IDS[variant];
 // once; because this config is dynamic, EAS can't write it here itself — paste it
 // between the quotes below (docs/BUILD.md). It must be in this file, not only in a
 // local environment variable, because the EAS build server reads this file too.
-const EAS_PROJECT_ID_FROM_INIT = '0f37ac60-4210-47d5-8a41-4a4b4e1e5972'; // @mapping/mappingg
-const EAS_OWNER = 'mapping';
+const EAS_PROJECT_ID_FROM_INIT = '59d3c446-47b1-4e3b-8c5a-8b055051d277'; // @mappingg/mappingg
+const EAS_OWNER = 'mappingg';
 const EAS_PROJECT_ID = (EAS_PROJECT_ID_FROM_INIT || process.env.EAS_PROJECT_ID || '').trim();
 
 const LOCATION_REASON = 'Mappingg uses your location to show real estate projects near you on the map.';

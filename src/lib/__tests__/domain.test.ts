@@ -2,7 +2,7 @@ import { normalizePin } from '@/services/publicData';
 import type { Pin } from '@/types/models';
 import { developerGroups, findGroup, localityGroups, relatedProjects, statusGroups } from '../entities';
 import { isFieldOn, reraNumbers, shown, teaserLine, uspPoints } from '../fieldVisibility';
-import { buildSuggestions, interpretQuery, matchSuggestions, pinsInArea } from '../search';
+import { buildSuggestions, matchSuggestions, pinsInArea, searchMap } from '../search';
 
 // Rows shaped exactly like www.mappingg.com /api/db responses.
 const raw = {
@@ -101,12 +101,24 @@ describe('map search', () => {
     expect(matchSuggestions(all, '4 bhk').map((s) => s.label)).toEqual(['4 BHK']);
     expect(all.some((s) => s.label === 'Mundhwa')).toBe(true);
   });
-  it('focuses areas and filters pins', () => {
-    expect(interpretQuery('mundhwa', pins, areas).kind).toBe('mundhwa');
-    expect(interpretQuery('kharadi', pins, areas).kind).toBe('area');
-    const f = interpretQuery('jhamtani', pins, areas);
-    expect(f.kind === 'filter' && [...(f.ids || [])]).toEqual(['490b59f7']);
-    expect(interpretQuery('', pins, areas)).toEqual({ kind: 'filter', ids: null });
+  const ids = (o: ReturnType<typeof searchMap>) => (o.kind === 'results' ? o.pins.map((p) => p.id) : []);
+  it('shows the projects of a place, or a single named project', () => {
+    expect(searchMap('', pins, areas)).toEqual({ kind: 'all' });
+    expect(ids(searchMap('kharadi', pins, areas))).toEqual(['2']);
+    expect(ids(searchMap('flats in Kharadi', pins, areas))).toEqual(['2']);
+    expect(ids(searchMap('mundhwa', pins, areas))).toEqual(['490b59f7']);
+    const one = searchMap('jhamtani ace abundance', pins, areas);
+    expect(one.kind === 'results' && one.project?.id).toBe('490b59f7');
+    // A project named after a place shows that project, not the whole place.
+    const named = searchMap('Kharadi Heights', pins, areas);
+    expect(named.kind === 'results' && named.project?.id).toBe('2');
+  });
+  it('says when a place or query has no projects', () => {
+    const empty = [{ ...areas[0]!, id: 'baner', label: 'Baner', match: ['baner'], fallbackLat: 18.56, fallbackLng: 73.78 }];
+    const o = searchMap('baner', pins, empty);
+    expect(o.kind).toBe('none');
+    expect(o.kind === 'none' && o.place).toBe('Baner');
+    expect(searchMap('zzzz', pins, areas)).toEqual({ kind: 'none', place: null, area: undefined });
   });
   it('finds pins near an area fallback centre, excluding the main Mundhwa boundary', () => {
     // The live map_settings boundary (www.mappingg.com, Oct 2026).

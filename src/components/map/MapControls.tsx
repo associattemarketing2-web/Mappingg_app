@@ -13,12 +13,14 @@ export function SearchBar({
   onChange,
   suggestions,
   onPick,
+  onSubmit,
   onClear,
 }: {
   value: string;
   onChange(v: string): void;
   suggestions: Suggestion[];
   onPick(s: Suggestion): void;
+  onSubmit(): void;
   onClear(): void;
 }) {
   return (
@@ -32,6 +34,7 @@ export function SearchBar({
           placeholderTextColor="#8a938f"
           style={styles.searchInput}
           returnKeyType="search"
+          onSubmitEditing={onSubmit}
           autoCorrect={false}
           accessibilityLabel="Search projects, locations or configurations"
           maxFontSizeMultiplier={1.3}
@@ -59,6 +62,33 @@ export function SearchBar({
           />
         </View>
       ) : null}
+    </View>
+  );
+}
+
+export type SearchStatusInfo =
+  | { kind: 'results'; query: string; place: string | null; count: number; project: string | null }
+  | { kind: 'none'; query: string; place: string | null };
+
+/** One line under the search bar: what the search found, or that there is nothing there yet. */
+export function SearchStatus({ info, onClear }: { info: SearchStatusInfo; onClear(): void }) {
+  const none = info.kind === 'none';
+  const text = none
+    ? info.place
+      ? `No projects available in ${info.place} yet.`
+      : `No projects available for “${info.query}”. Try another location or project name.`
+    : info.project
+      ? info.project
+      : `${info.count} project${info.count === 1 ? '' : 's'}${info.place ? ` in ${info.place}` : ` for “${info.query}”`}`;
+  return (
+    <View style={[styles.status, none && styles.statusNone]} accessibilityRole="alert" accessibilityLiveRegion="polite">
+      <Ionicons name={none ? 'alert-circle-outline' : 'location'} size={18} color={none ? colors.danger : colors.forest} />
+      <Text style={styles.statusText} numberOfLines={2}>
+        {text}
+      </Text>
+      <Pressable onPress={onClear} accessibilityRole="button" accessibilityLabel="Show all projects" hitSlop={8} style={styles.statusBtn}>
+        <Text style={styles.statusBtnText}>Show all</Text>
+      </Pressable>
     </View>
   );
 }
@@ -180,6 +210,20 @@ const styles = StyleSheet.create({
   },
   suggText: { flex: 1, fontFamily: fonts.medium, fontSize: 14, color: colors.mapInk },
   suggType: { fontFamily: fonts.semibold, fontSize: 11, color: colors.goldDeep, textTransform: 'uppercase' },
+  status: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 8,
+    paddingLeft: 12,
+    borderRadius: radius.md,
+    backgroundColor: 'rgba(255,255,255,0.97)',
+    ...shadow.card,
+  },
+  statusNone: { backgroundColor: colors.dangerBg },
+  statusText: { flex: 1, paddingVertical: 10, fontFamily: fonts.medium, fontSize: 13, color: colors.mapInk },
+  statusBtn: { minHeight: 40, paddingHorizontal: 12, justifyContent: 'center' },
+  statusBtnText: { fontFamily: fonts.semibold, fontSize: 13, color: colors.forest },
   toolbar: { flexDirection: 'row', gap: 8, marginTop: 8 },
   pill: {
     flexDirection: 'row',

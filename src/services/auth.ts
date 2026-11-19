@@ -111,27 +111,33 @@ export async function signup(input: SignupInput): Promise<{ token: string; user:
 /** Who a code is for: sign-up sends both, login a mobile, reset either one. */
 export type OtpIdentity = { email: string; mobile?: string } | { email?: undefined; mobile: string };
 
+export type OtpChannel = 'whatsapp' | 'email';
+
 /**
- * Sends a 6-digit code on WhatsApp (same as the website's /api/auth/otp) and
- * returns the signed ticket to send back with it, plus the masked number it went to.
+ * Sends a 6-digit code (same as the website's /api/auth/otp) and returns the
+ * signed ticket to send back with it, plus where it went (masked). Codes go on
+ * WhatsApp; password-reset codes go by email unless `channel` asks for WhatsApp.
  */
 export async function requestOtp(
   identity: OtpIdentity,
   purpose: 'signup' | 'reset' | 'login',
   name?: string,
-): Promise<{ ticket: string; to: string }> {
-  const res = await apiRequest<{ data?: { sent?: boolean; ticket?: string; to?: string } }>('/api/auth/otp', {
+  channel?: OtpChannel,
+): Promise<{ ticket: string; to: string; channel: OtpChannel }> {
+  const res = await apiRequest<{ data?: { sent?: boolean; ticket?: string; to?: string; channel?: string } }>('/api/auth/otp', {
     method: 'POST',
     body: {
       ...(identity.email ? { email: identity.email.trim() } : {}),
       ...(identity.mobile ? { mobile: identity.mobile } : {}),
       purpose,
       ...(name ? { name } : {}),
+      ...(channel ? { channel } : {}),
     },
   });
   const ticket = res?.data?.ticket;
   if (!ticket) throw new ApiError('parse', 'Could not send the code. Please try again.');
-  return { ticket, to: String(res.data?.to || identity.mobile || '') };
+  const sentBy: OtpChannel = res.data?.channel === 'email' ? 'email' : 'whatsapp';
+  return { ticket, to: String(res.data?.to || (sentBy === 'email' ? identity.email : identity.mobile) || ''), channel: sentBy };
 }
 
 /** Sign in with the WhatsApp number + code (website's /api/auth/otp-login). */
