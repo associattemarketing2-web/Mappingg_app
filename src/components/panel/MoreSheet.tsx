@@ -17,7 +17,7 @@ export function MoreSheet({ open, items, active, onPick, onClose }: { open: bool
         <View style={styles.grid}>
           {items.map((t) => {
             const on = t.label === active;
-            const ic = iconFor(t.label);
+            const ic = t.icon || iconFor(t.label);
             return (
               <Pressable
                 key={t.label}
@@ -35,7 +35,7 @@ export function MoreSheet({ open, items, active, onPick, onClose }: { open: bool
                   ) : null}
                 </View>
                 <Text style={styles.tileText} numberOfLines={2} maxFontSizeMultiplier={1.2}>
-                  {t.label}
+                  {t.title || t.label}
                 </Text>
               </Pressable>
             );

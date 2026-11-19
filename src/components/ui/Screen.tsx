@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import type { ComponentRef, ReactNode, Ref } from 'react';
 import { KeyboardAvoidingView, Platform, RefreshControl, ScrollView, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import { SafeAreaView, type Edge } from 'react-native-safe-area-context';
 import { colors } from '@/constants/theme';
@@ -14,16 +14,19 @@ interface Props {
   onRefresh?: () => void;
   background?: string;
   footer?: ReactNode;
+  /** The ScrollView, e.g. to jump to a section. */
+  scrollRef?: Ref<ComponentRef<typeof ScrollView>>;
 }
 
 /** Standard screen: safe areas, keyboard avoidance, optional scroll + pull-to-refresh. */
-export function Screen({ children, scroll = true, edges = ['bottom'], contentStyle, refreshing, onRefresh, background = colors.paper, footer }: Props) {
+export function Screen({ children, scroll = true, edges = ['bottom'], contentStyle, refreshing, onRefresh, background = colors.paper, footer, scrollRef }: Props) {
   return (
     <SafeAreaView edges={edges} style={[styles.flex, { backgroundColor: background }]}>
       <OfflineBanner />
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         {scroll ? (
           <ScrollView
+            ref={scrollRef}
             style={styles.flex}
             contentContainerStyle={[styles.content, contentStyle]}
             keyboardShouldPersistTaps="handled"

@@ -26,6 +26,27 @@ if (variant !== 'development' && apiBaseUrl && !apiBaseUrl.startsWith('https://'
 }
 const allowCleartext = variant === 'development' && apiBaseUrl.startsWith('http://');
 
+// Store builds must load satellite imagery from a licensed provider, not Esri's
+// public endpoint (see src/constants/mapTiles.ts). Set the provider and its key
+// as EAS environment variables for "production". ALLOW_UNLICENSED_SATELLITE=1
+// skips this check for a one-off build; don't ship such a build to the store.
+// Checked only on the EAS build server (EAS_BUILD=true): that is where the store
+// build is made and where the EAS variables are loaded. EAS CLI also reads this
+// file on your PC before uploading, without those variables.
+if (variant === 'production' && process.env.EAS_BUILD === 'true' && process.env.ALLOW_UNLICENSED_SATELLITE !== '1') {
+  const sat = (process.env.EXPO_PUBLIC_MAP_SATELLITE_TILES || '').trim().toLowerCase();
+  const keyFor: Record<string, string | undefined> = {
+    arcgis: process.env.EXPO_PUBLIC_ARCGIS_BASEMAP_KEY,
+    maptiler: process.env.EXPO_PUBLIC_MAPTILER_KEY,
+  };
+  if (!(sat in keyFor) || !(keyFor[sat] || '').trim()) {
+    throw new Error(
+      'Production builds need licensed satellite tiles: set EXPO_PUBLIC_MAP_SATELLITE_TILES to "arcgis" (with ' +
+        'EXPO_PUBLIC_ARCGIS_BASEMAP_KEY) or "maptiler" (with EXPO_PUBLIC_MAPTILER_KEY). See docs/BUILD.md → Map tiles.',
+    );
+  }
+}
+
 const IDS: Record<Variant, { name: string; androidPackage: string; iosBundle: string }> = {
   development: { name: 'Mappingg (Dev)', androidPackage: 'com.mappingg.app.dev', iosBundle: 'com.mappingg.app.dev' },
   preview: { name: 'Mappingg (Preview)', androidPackage: 'com.mappingg.app.preview', iosBundle: 'com.mappingg.app.preview' },
@@ -60,6 +81,8 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     infoPlist: {
       NSLocationWhenInUseUsageDescription: LOCATION_REASON,
       ITSAppUsesNonExemptEncryption: false,
+      // Razorpay checkout (subscriptions): lets it open the phone's UPI apps.
+      LSApplicationQueriesSchemes: ['tez', 'phonepe', 'paytmmp', 'credpay', 'bhim'],
     },
   },
   android: {
@@ -102,7 +125,22 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
       { image: './assets/splash-icon.png', imageWidth: 160, resizeMode: 'contain', backgroundColor: '#ffffff' },
     ],
     '@maplibre/maplibre-react-native',
-    ['expo-build-properties', { android: { usesCleartextTraffic: allowCleartext } }],
+    [
+      'expo-build-properties',
+      {
+        android: {
+          usesCleartextTraffic: allowCleartext,
+          // Razorpay's native checkout (react-native-razorpay README → Proguard Rules), in case minification is turned on.
+          extraProguardRules: [
+            '-keepattributes *Annotation*',
+            '-dontwarn com.razorpay.**',
+            '-keep class com.razorpay.** {*;}',
+            '-optimizations !method/inlining/',
+            '-keepclasseswithmembers class * { public void onPayment*(...); }',
+          ].join('\n'),
+        },
+      },
+    ],
   ],
   experiments: { typedRoutes: true },
   extra: {

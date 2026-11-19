@@ -15,8 +15,8 @@ export function AppText({ variant = 'body', style, ...rest }: TextProps & { vari
 }
 
 const styles = StyleSheet.create({
-  display: { fontFamily: fonts.display, fontSize: 26, lineHeight: 32, color: colors.ink },
-  title: { fontFamily: fonts.bold, fontSize: 22, lineHeight: 28, color: colors.ink, letterSpacing: -0.3 },
+  display: { fontFamily: fonts.display, fontSize: 28, lineHeight: 34, letterSpacing: -0.7, color: colors.ink },
+  title: { fontFamily: fonts.bold, fontSize: 21, lineHeight: 27, color: colors.ink, letterSpacing: -0.4 },
   heading: { fontFamily: fonts.bold, fontSize: 17, lineHeight: 23, color: colors.ink },
   body: { fontFamily: fonts.regular, fontSize: 15, lineHeight: 22, color: colors.text },
   bodyStrong: { fontFamily: fonts.semibold, fontSize: 15, lineHeight: 22, color: colors.ink },

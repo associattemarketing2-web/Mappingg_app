@@ -20,6 +20,8 @@ interface AuthState {
   signIn(email: string, password: string): Promise<SessionUser>;
   /** Sign in with a WhatsApp number and the 6-digit code sent to it. */
   signInWithOtp(mobile: string, otp: string, ticket: string): Promise<SessionUser>;
+  /** "Create account with WhatsApp OTP": signs in, or creates a buyer account with just the number. */
+  quickWithOtp(mobile: string, otp: string, ticket: string): Promise<SessionUser & { created?: boolean }>;
   signUp(input: auth.SignupInput): Promise<SessionUser>;
   signOut(): Promise<void>;
   /** Re-reads the account from the server (and renews the session). */
@@ -172,6 +174,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [startSession],
   );
 
+  const quickWithOtp = useCallback(
+    async (mobile: string, otp: string, ticket: string) => {
+      const r = await auth.otpQuick(mobile, otp, ticket);
+      const u = await startSession(r);
+      return { ...u, created: r.created };
+    },
+    [startSession],
+  );
+
   const signUp = useCallback(
     async (input: auth.SignupInput) => {
       const { token, user: u } = await auth.signup(input);
@@ -199,8 +210,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const sessionToken = useCallback(() => tokenRef.current, []);
 
   const value = useMemo<AuthState>(
-    () => ({ status, user, offline, sessionEnded, signIn, signInWithOtp, signUp, signOut, refresh, setUser, sessionToken }),
-    [status, user, offline, sessionEnded, signIn, signInWithOtp, signUp, signOut, refresh, setUser, sessionToken],
+    () => ({ status, user, offline, sessionEnded, signIn, signInWithOtp, quickWithOtp, signUp, signOut, refresh, setUser, sessionToken }),
+    [status, user, offline, sessionEnded, signIn, signInWithOtp, quickWithOtp, signUp, signOut, refresh, setUser, sessionToken],
   );
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

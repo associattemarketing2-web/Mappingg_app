@@ -85,3 +85,40 @@
 | Dashboard: click a day in “Projects created day by day” | ✅ website panel (WebView); its “Project page” links open the app’s project screen |
 | Developer intake, scraped data, admin fixes, login role default | ✅ automatic — the panels are the website’s own pages, and auth is server-side |
 | SEO-only changes (pagination, page titles, crawler text, blog, landing copy) | ❌ not applicable to the app |
+
+## Website changes of 23 Oct – 5 Nov 2026, synced on 11 Nov 2026
+
+| Website change | App |
+|---|---|
+| Sign-up no longer asks buyers what they're looking for (name, WhatsApp, email, password only) | ✅ same form (`src/app/auth/sign-up.tsx`); developers/agents unchanged |
+| “Create account with WhatsApp OTP” — just a number + code (`/api/auth/otp` purpose `quick` → `/api/auth/otp-quick`); signs in if the number already has an account | ✅ `auth/whatsapp?mode=create`, button at the top of Create account (buyers) |
+| “What are you looking for?” popup after 3 projects opened or a site visit; asks name/email for WhatsApp-code accounts (`PATCH /api/my/profile`); Skip = 1 week | ✅ `src/providers/PrefAskProvider.tsx` (pin card + project page count as opens) |
+| Map card “Enquire now” renamed “Know more” | ✅ pin card |
+| Project details panel (`/api/project-quickview`): photo gallery, land / towers / floors / units (“On request”), green certification, configuration · carpet area · price table (row → WhatsApp), Explore more (payment plan, floor plans, brochure, 360° tour; missing → ask on WhatsApp), Copy link | ✅ project page |
+| “Book Site Visit” — day (today … 60 days) + time slot saved on the lead (`/api/my/enquire` `site_visit`) | ✅ `src/app/site-visit.tsx`; guests → contact form with the project filled in |
+| Brochure viewer (`/api/brochure/<id>`, pdf.js, view-only; Download for approved channel partners and staff) | ✅ `src/app/brochure/[id].tsx`; pins carry `has_brochure_file` |
+| Accounts with only a WhatsApp code have no email / password | ✅ Account shows the mobile; Delete account sends a deletion request (server answers `no_password`) |
+| Home page hero / blog / SEO pages, admin panels (WhatsApp bulk send, lead sources, grouped tabs) | ❌ marketing pages not in the app · ✅ admin panels automatic (website pages in the panel WebView) |
+
+## Subscriptions & membership (website 14–17 Nov 2026), synced on 17 Nov 2026
+
+Same server, same rules: every plan, price, feature, limit, usage count and amount comes from `/api/subscriptions/*`, `/api/cp/*` and `/api/buyer/*` (`src/services/subscriptions.ts`). Only the design is the app's.
+
+| Website | App |
+|---|---|
+| Master switch (Super admin → Subscriptions → Enable / Disable, `SUBSCRIPTIONS_ENABLED`): off = no pricing, plan links, plan picker, checkout or limits | ✅ `useSubscriptionsEnabled` (from `/api/subscriptions/plans` `enabled`) hides the same things |
+| `/pricing`: Developers / Channel Partners / Home Buyers tabs, cards (Most popular, limits, “See all N features”), trust row, compare table, 4 steps, billing notes, contact | ✅ `src/app/pricing.tsx`; guests → sign-up with role + plan, signed-in → their plan's checkout |
+| Sign-up plan picker (Free default, paid plans, note); buyers with a paid plan go straight to checkout; developers / CPs pay after RERA check | ✅ `src/app/auth/sign-up.tsx` (`profile.plan`) |
+| My subscription: alerts (activate plan picked at sign-up, renewal due, ends in ≤7 days, cancelled, scheduled change, failed payment, expired, choose city), current plan, usage, project coverage, change plan + compare, what's included, invoices, payment history, subscription history, notifications; cancel / keep / undo | ✅ `src/app/subscription/index.tsx` |
+| Checkout: projects (per-project plans), city (one-city CP plans), coupon, GSTIN, terms, server price breakdown, Razorpay, verify, result (paid / pending / failed / scheduled / activated) | ✅ `src/app/subscription/checkout.tsx` — Razorpay's native SDK (`react-native-razorpay`), same `verify-payment` |
+| Invoice page + “Save as PDF” | ✅ `src/app/subscription/invoice/[id].tsx` — same layout, PDF via `expo-print` |
+| CP Leads & CRM: add lead, pipeline, search, status / priority, follow-ups, notes, update log, archive / restore, CSV export, future prices (Pro Max) | ✅ `src/app/crm.tsx` |
+| Buyer premium tools: EMI & eligibility (free), saved & compared, insights, expert / legal / vastu requests, portfolio manager, legal checklist, vastu guide | ✅ `src/app/premium.tsx`, insights computed from the same public data (`src/lib/insights.ts`) |
+| Buyer favourites page | ✅ `/favorites` now also for buyers (view / remove, like the website) |
+| “Your plan” card on profile / developer dashboard | ✅ Account tab (`PlanSummary`); developer panel shows the website's own |
+| Plan limit popup (402 on Know more / details / site visit / brochure download / compare / favourites / developer project limit) | ✅ `PlanGateProvider` — same text, “Upgrade to …”, “Compare plans”, “Not now” |
+| Signed-in project details count toward CP / buyer limits (`/api/project-quickview`) | ✅ quick view is sent with the session |
+| Developer panel: Subscription tab, Project media tab, plan links | ✅ Subscription + plan / invoice / pricing links open the app's screens (native checkout); Project media stays the website's page |
+| Super admin → Subscriptions (plans, payments, refunds, coupons, reports, settings) | ✅ automatic (website panel in the app) |
+
+New native modules: `react-native-razorpay`, `expo-print` — a new build (APK / dev client) is needed.

@@ -1,5 +1,5 @@
-import { Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold } from '@expo-google-fonts/inter';
-import { PlayfairDisplay_700Bold } from '@expo-google-fonts/playfair-display';
+import { Ionicons } from '@expo/vector-icons';
+import { Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold, Inter_800ExtraBold } from '@expo-google-fonts/inter';
 import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
@@ -9,6 +9,8 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { colors, fonts } from '@/constants/theme';
 import { AuthProvider } from '@/providers/AuthProvider';
 import { GuestGateProvider } from '@/providers/GuestGateProvider';
+import { PlanGateProvider } from '@/providers/PlanGateProvider';
+import { PrefAskProvider } from '@/providers/PrefAskProvider';
 import { QueryProvider } from '@/providers/QueryProvider';
 import { ToastProvider } from '@/providers/ToastProvider';
 
@@ -23,7 +25,10 @@ export default function RootLayout() {
     Inter_500Medium,
     Inter_600SemiBold,
     Inter_700Bold,
-    PlayfairDisplay_700Bold,
+    Inter_800ExtraBold,
+    // Load the icon font up front so icons never render as empty boxes/circles
+    // on the first frame (or at all on devices where lazy loading fails).
+    ...Ionicons.font,
   });
 
   useEffect(() => {
@@ -39,6 +44,8 @@ export default function RootLayout() {
         <AuthProvider>
           <ToastProvider>
             <GuestGateProvider>
+            <PrefAskProvider>
+            <PlanGateProvider>
               <StatusBar style="dark" />
               <Stack
                 screenOptions={{
@@ -58,7 +65,8 @@ export default function RootLayout() {
                 <Stack.Screen name="browse/[kind]/[slug]" options={{ title: '' }} />
                 <Stack.Screen name="auth/sign-in" options={{ title: 'Sign in', presentation: 'modal' }} />
                 <Stack.Screen name="auth/sign-up" options={{ title: 'Create account', presentation: 'modal' }} />
-                <Stack.Screen name="auth/whatsapp" options={{ title: 'WhatsApp sign in', presentation: 'modal' }} />
+                <Stack.Screen name="brochure/[id]" options={{ title: 'Brochure' }} />
+                <Stack.Screen name="site-visit" options={{ title: 'Book a site visit', presentation: 'modal' }} />
                 <Stack.Screen name="auth/forgot-password"options={{ title: 'Reset password', presentation: 'modal' }} />
                 <Stack.Screen name="auth/add-mobile" options={{ title: 'Add mobile number', presentation: 'modal' }} />
                 <Stack.Screen name="compare" options={{ title: 'Compare projects' }} />
@@ -68,9 +76,17 @@ export default function RootLayout() {
                 <Stack.Screen name="my-projects/edit" options={{ title: 'Project', presentation: 'modal' }} />
                 <Stack.Screen name="notifications" options={{ title: 'Notifications' }} />
                 <Stack.Screen name="contact" options={{ title: 'Contact us' }} />
+                <Stack.Screen name="subscription/index" options={{ title: 'My subscription' }} />
+                <Stack.Screen name="subscription/checkout" options={{ title: 'Checkout', presentation: 'modal' }} />
+                <Stack.Screen name="subscription/invoice/[id]" options={{ title: 'Invoice' }} />
+                <Stack.Screen name="pricing" options={{ title: 'Pricing plans' }} />
+                <Stack.Screen name="crm" options={{ title: 'Leads & CRM' }} />
+                <Stack.Screen name="premium" options={{ title: 'Premium tools' }} />
                 <Stack.Screen name="delete-account" options={{ title: 'Delete account', presentation: 'modal' }} />
                 <Stack.Screen name="+not-found" options={{ title: 'Not found' }} />
               </Stack>
+            </PlanGateProvider>
+            </PrefAskProvider>
             </GuestGateProvider>
           </ToastProvider>
         </AuthProvider>

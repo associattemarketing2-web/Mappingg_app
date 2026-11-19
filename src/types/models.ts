@@ -54,6 +54,8 @@ export interface Pin {
   /** Absolute image URL (logo / cover) or null. */
   image: string | null;
   brochureImage: string | null;
+  /** A brochure file (PDF / image) is on file — opened through /api/brochure/<id>. */
+  hasBrochure: boolean;
   updatedAt: string;
   createdAt: string;
   /** Derived. */
@@ -145,6 +147,32 @@ export interface EnquireResult {
   email?: string;
   role?: string;
   project?: string;
+  site_visit?: boolean;
+}
+
+/** /api/project-quickview — the details panel the website's map opens after "Know more". */
+export interface UnitRow {
+  config: string;
+  area: string;
+  price: string;
+}
+export interface QuickView {
+  type: string;
+  usp: string;
+  about: string;
+  logo: string;
+  photos: string[];
+  video: string;
+  brochure: string;
+  floorPlans: string[];
+  paymentPlan: string;
+  tour360: string;
+  facts: { k: string; v: string }[];
+  configs: string[];
+  units: UnitRow[];
+  highlights: string[];
+  green: string;
+  rera: string;
 }
 
 export interface BuyerProfile {

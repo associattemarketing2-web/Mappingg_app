@@ -1,17 +1,20 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
-import type { ReactNode } from 'react';
+import { useRouter } from 'expo-router';
+import { useEffect, type ReactNode } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { openUrl } from '@/lib/openLink';
+import { usePrefAsk } from '@/providers/PrefAskProvider';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { whatsappProjectUrl } from '@/constants/contact';
 import { mapStatusLabel } from '@/constants/status';
 import { colors, fonts, radius, shadow, TOUCH } from '@/constants/theme';
 import { isFieldOn, shown, visibleCustomFields } from '@/lib/fieldVisibility';
-import { youtubeId, youtubeThumb, youtubeWatchUrl } from '@/lib/youtube';
+import { youtubeId } from '@/lib/youtube';
 import { withWidth } from '@/services/publicData';
 import type { Pin } from '@/types/models';
 import { Chip, Logo, StatusBadge } from '../ProjectBits';
+import { YouTubePlayer } from '../YouTubePlayer';
 
 // The project card that opens when a pin is tapped — the website's map
 // "teaser card": logo + name, developer / location / status / type, then the
@@ -30,6 +33,10 @@ interface Props {
 
 export function PinSheet({ pin, onClose, onEnquire, onShare, onDetails, compare, favorite, enquiring }: Props) {
   const insets = useSafeAreaInsets();
+  const router = useRouter();
+  const prefAsk = usePrefAsk();
+  // A project card opened on the map counts towards the buyer's "What are you looking for?" prompt.
+  useEffect(() => prefAsk.noteProject(pin.id), [pin.id, prefAsk]);
   const configValue = [pin.configuration, pin.sqft].filter(Boolean).join(' · ');
   const upcoming = pin.status === 'upcoming';
   const possession = upcoming ? (pin.launchDate ? `Launching: ${pin.launchDate}` : '') : pin.possessionTimeline ? `Possession: ${pin.possessionTimeline}` : '';
@@ -82,20 +89,10 @@ export function PinSheet({ pin, onClose, onEnquire, onShare, onDetails, compare,
         ) : null}
 
         {vid ? (
-          <Pressable
-            onPress={() => openUrl(youtubeWatchUrl(vid))}
-            accessibilityRole="link"
-            accessibilityLabel="Watch the project video on YouTube"
-            style={styles.media}
-          >
+          <View style={styles.media}>
             <Text style={styles.mediaLabel}>PROJECT VIDEO</Text>
-            <View>
-              <Image source={{ uri: youtubeThumb(vid) }} style={styles.mediaImg} contentFit="cover" />
-              <View style={styles.play}>
-                <Ionicons name="play" size={26} color="#fff" />
-              </View>
-            </View>
-          </Pressable>
+            <YouTubePlayer key={vid} id={vid} title={pin.title} />
+          </View>
         ) : pin.brochureImage ? (
           <View style={styles.media}>
             <Text style={styles.mediaLabel}>PROJECT BROCHURE</Text>
@@ -106,12 +103,15 @@ export function PinSheet({ pin, onClose, onEnquire, onShare, onDetails, compare,
 
       <View style={styles.actions}>
         {isFieldOn(pin, 'enquire') ? (
-          <Action icon="mail-unread-outline" label={enquiring ? 'Sending…' : 'Enquire'} primary onPress={() => onEnquire(pin)} disabled={enquiring} />
+          <Action icon="mail-unread-outline" label={enquiring ? 'Sending…' : 'Know more'} primary onPress={() => onEnquire(pin)} disabled={enquiring} />
         ) : null}
         {isFieldOn(pin, 'whatsapp') ? (
           <Action icon="logo-whatsapp" label="WhatsApp" color={colors.whatsapp} onPress={() => openUrl(whatsappProjectUrl(pin.title))} />
         ) : null}
         <Action icon="share-social-outline" label="Share" onPress={() => onShare(pin)} />
+        {pin.hasBrochure ? (
+          <Action icon="document-text-outline" label="Brochure" onPress={() => router.push({ pathname: '/brochure/[id]', params: { id: pin.id, title: pin.title } })} />
+        ) : null}
         {compare ? <Action icon={compare.on ? 'git-compare' : 'git-compare-outline'} label={compare.on ? 'Added' : 'Compare'} active={compare.on} onPress={compare.toggle} /> : null}
         {favorite ? <Action icon={favorite.on ? 'heart' : 'heart-outline'} label={favorite.on ? 'Saved' : 'Favourite'} active={favorite.on} onPress={favorite.toggle} /> : null}
         <Action icon="information-circle-outline" label="Details" onPress={() => onDetails(pin)} />
@@ -173,7 +173,7 @@ const styles = StyleSheet.create({
   content: { paddingHorizontal: 18, paddingTop: 10, paddingBottom: 6 },
   top: { flexDirection: 'row', gap: 14, paddingRight: 34 },
   head: { flex: 1, minWidth: 0 },
-  title: { fontFamily: fonts.display, fontSize: 21, lineHeight: 26, color: colors.mapInk },
+  title: { fontFamily: fonts.bold, fontSize: 20, lineHeight: 26, letterSpacing: -0.3, color: colors.mapInk },
   meta: { marginTop: 2, fontFamily: fonts.regular, fontSize: 13, color: colors.muted },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 8 },
   details: { marginTop: 14, borderTopWidth: 1, borderTopColor: colors.line, paddingTop: 10, gap: 8 },
@@ -183,17 +183,6 @@ const styles = StyleSheet.create({
   media: { marginTop: 14 },
   mediaLabel: { fontFamily: fonts.bold, fontSize: 11, letterSpacing: 1, color: colors.goldDeep, marginBottom: 6 },
   mediaImg: { width: '100%', aspectRatio: 16 / 9, borderRadius: radius.md, backgroundColor: '#000' },
-  play: {
-    position: 'absolute',
-    alignSelf: 'center',
-    top: '38%',
-    width: 54,
-    height: 54,
-    borderRadius: 27,
-    backgroundColor: 'rgba(0,0,0,0.55)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   actions: {
     flexDirection: 'row',
     flexWrap: 'wrap',

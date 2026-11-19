@@ -9,8 +9,13 @@ import { iconFor, SHORT_LABEL } from './panelTabs';
 // (Profile) at the bottom right.
 
 export interface BarItem {
+  /** Key passed back on press (a website panel tab label, or an app section key). */
   label: string;
   badge?: string;
+  /** Text shown instead of the label. */
+  title?: string;
+  /** Icon instead of the one matched from the label. */
+  icon?: { on: keyof typeof Ionicons.glyphMap; off: keyof typeof Ionicons.glyphMap };
 }
 
 interface Props {
@@ -25,6 +30,8 @@ interface Props {
   onPress(label: string): void;
   onMore(): void;
   onProfile(): void;
+  /** Profile slot at the right (off when the screen has its own avatar button). */
+  showProfile?: boolean;
 }
 
 export function PanelTabBar(p: Props) {
@@ -33,18 +40,20 @@ export function PanelTabBar(p: Props) {
     <View style={[styles.bar, { paddingBottom: Math.max(insets.bottom, 8) }]} accessibilityRole="tablist">
       {p.items.map((t) => {
         const on = t.label === p.active;
-        const ic = iconFor(t.label);
+        const ic = t.icon || iconFor(t.label);
+        const text = t.title || SHORT_LABEL[t.label] || t.label;
         return (
-          <Slot key={t.label} label={SHORT_LABEL[t.label] || t.label} a11y={t.label} on={on} badge={t.badge} onPress={() => p.onPress(t.label)}>
-            <Ionicons name={on ? ic.on : ic.off} size={22} color={on ? colors.forest : colors.muted} />
+          <Slot key={t.label} label={text} a11y={text} on={on} badge={t.badge} onPress={() => p.onPress(t.label)}>
+            <Ionicons name={on ? ic.on : ic.off} size={22} color={on ? '#fff' : colors.muted} />
           </Slot>
         );
       })}
       {p.showMore ? (
         <Slot label="More" a11y="More sections" on={p.moreActive} badge={p.moreBadge ? String(p.moreBadge) : undefined} onPress={p.onMore}>
-          <Ionicons name={p.moreActive ? 'apps' : 'apps-outline'} size={22} color={p.moreActive ? colors.forest : colors.muted} />
+          <Ionicons name="ellipsis-horizontal" size={22} color={p.moreActive ? '#fff' : colors.muted} />
         </Slot>
       ) : null}
+      {p.showProfile === false ? null : (
       <Slot label="Profile" a11y="Profile and settings" on={p.profileActive} onPress={p.onProfile}>
         <View style={[styles.avatar, p.profileActive && styles.avatarOn]}>
           {p.avatar ? (
@@ -54,6 +63,7 @@ export function PanelTabBar(p: Props) {
           )}
         </View>
       </Slot>
+      )}
     </View>
   );
 }
@@ -99,9 +109,9 @@ const styles = StyleSheet.create({
     elevation: 12,
   },
   slot: { flex: 1, alignItems: 'center', minHeight: 52, justifyContent: 'center', gap: 3 },
-  pill: { width: 56, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
-  pillOn: { backgroundColor: colors.forestTint },
-  label: { fontFamily: fonts.medium, fontSize: 11, color: colors.muted, maxWidth: 76 },
+  pill: { width: 58, height: 34, borderRadius: 17, alignItems: 'center', justifyContent: 'center' },
+  pillOn: { backgroundColor: colors.forestDeep },
+  label: { fontFamily: fonts.medium, fontSize: 11.5, color: colors.muted, maxWidth: 80 },
   labelOn: { fontFamily: fonts.bold, color: colors.forest },
   badge: {
     position: 'absolute',
@@ -119,7 +129,7 @@ const styles = StyleSheet.create({
   },
   badgeText: { color: '#fff', fontFamily: fonts.bold, fontSize: 10 },
   avatar: { width: 26, height: 26, borderRadius: 13, backgroundColor: colors.forest, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
-  avatarOn: { borderWidth: 2, borderColor: colors.forest },
+  avatarOn: { borderWidth: 2, borderColor: '#fff' },
   avatarImg: { width: '100%', height: '100%' },
   avatarText: { color: '#fff', fontFamily: fonts.bold, fontSize: 10 },
 });

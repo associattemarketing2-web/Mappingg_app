@@ -56,7 +56,7 @@ export default function DeleteAccountScreen() {
   const sendRequestInstead = async () => {
     try {
       await requestAccountDeletion(user);
-      finish('Request received', 'We will delete your account and personal data within 7 days and confirm by email. You have been signed out.');
+      finish('Request received', 'We will delete your account and personal data within 30 days and confirm by email. You have been signed out.');
     } catch {
       const body = encodeURIComponent(`Please delete my Mappingg account and personal data.\nEmail: ${user.email}\nAccount ID: ${user.id}`);
       Alert.alert('Could not send the request', `Please email us at ${EMAIL} and we will delete your account.`, [
@@ -96,6 +96,39 @@ export default function DeleteAccountScreen() {
     ]);
   };
 
+  // Accounts made with just a WhatsApp code have no email shown and no password:
+  // the deletion goes to the team as a request (the server answers "no_password" too).
+  if (!user.email) {
+    const requestNow = () =>
+      Alert.alert('Delete your account?', 'We will permanently delete your Mappingg account and personal data. It cannot be undone.', [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete account',
+          style: 'destructive',
+          onPress: () => {
+            if (running.current) return;
+            running.current = true;
+            setBusy(true);
+            void sendRequestInstead().finally(() => {
+              running.current = false;
+              setBusy(false);
+            });
+          },
+        },
+      ]);
+    return (
+      <Screen>
+        <AppText variant="title">Delete account</AppText>
+        <AppText style={styles.sub}>
+          This deletes the Mappingg account for {user.mobile || user.name}: your profile, saved compare list and favourites. Your account was made with a
+          WhatsApp code and has no password, so our team deletes it for you within 30 days and confirms on WhatsApp.
+        </AppText>
+        <Button title="Delete my account" variant="danger" icon="trash-outline" onPress={requestNow} loading={busy} />
+        <Button title="Cancel" variant="ghost" onPress={() => router.back()} disabled={busy} />
+      </Screen>
+    );
+  }
+
   return (
     <Screen>
       <AppText variant="title">Delete account</AppText>
@@ -105,7 +138,8 @@ export default function DeleteAccountScreen() {
       </AppText>
       <View style={styles.note}>
         <Text style={styles.noteText}>
-          Enquiries you already sent to project teams are business records and may be kept as described in our Privacy Policy.
+          Records of the projects you enquired about are kept for statistics, with your name, email, phone number and messages removed.
+          Projects a developer added stay on the map.
         </Text>
       </View>
       {error ? (

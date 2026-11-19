@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { Redirect, useRouter } from 'expo-router';
+import { Redirect, useFocusEffect, useRouter, type Href } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { requireOptionalNativeModule } from 'expo';
 import { BackHandler, Pressable, StyleSheet, Text, TurboModuleRegistry, View } from 'react-native';
@@ -14,6 +14,7 @@ import { ErrorState, LoadingState } from '@/components/ui/States';
 import { colors, fonts, TOUCH } from '@/constants/theme';
 import { panelOf, useAuth, type PanelKind } from '@/providers/AuthProvider';
 import { useToast } from '@/providers/ToastProvider';
+import { siteMode } from '@/lib/siteMode';
 import { ApiError } from '@/services/api/errors';
 
 // The panel needs native code (WebView, file system, sharing) that older app
@@ -37,9 +38,12 @@ const PanelWebView: typeof PanelWebViewComponent | null = panelSupported
 
 type Section = 'shell' | 'editor' | 'intake' | 'profile';
 
-const PANELS: Record<PanelKind, { shell: string; editor: string; intake?: string; own: Record<string, Section> }> = {
-  admin: { shell: '/dashboard/s-admin', editor: '/dashboard/s-admin/map', intake: '/intake', own: { 'Map Editor': 'editor', 'Projects Intake': 'intake' } },
-  developer: { shell: '/dashboard/developer', editor: '/dashboard/map', own: { 'Map Editor': 'editor' } },
+// `native`: panel sections the app shows as its own screens. A developer's
+// Subscription (plans, checkout, invoices) opens the app's subscription screen,
+// so payments go through the native Razorpay checkout.
+const PANELS: Record<PanelKind, { shell: string; editor: string; intake?: string; own: Record<string, Section>; native: Record<string, Href> }> = {
+  admin: { shell: '/dashboard/s-admin', editor: '/dashboard/s-admin/map', intake: '/intake', own: { 'Map Editor': 'editor', 'Projects Intake': 'intake' }, native: {} },
+  developer: { shell: '/dashboard/developer', editor: '/dashboard/map', own: { 'Map Editor': 'editor' }, native: { Subscription: '/subscription' } },
 };
 
 export default function PanelScreen() {
@@ -116,6 +120,13 @@ function Panel({ kind, PanelWebView }: { kind: PanelKind; PanelWebView: typeof P
     [cfg.intake, open],
   );
 
+  // Never leave a tab highlighted that didn't open (e.g. no permission any more).
+  useEffect(() => {
+    if (!pending) return;
+    const t = setTimeout(() => setPending(''), 8000);
+    return () => clearTimeout(t);
+  }, [pending]);
+
   const goShell = useCallback((label: string) => {
     setSection('shell');
     setPending(label);
@@ -125,7 +136,16 @@ function Panel({ kind, PanelWebView }: { kind: PanelKind; PanelWebView: typeof P
   const onShell = useCallback(
     (s: ShellState) => {
       setShell(s);
-      setPending('');
+      // Keep the tapped tab highlighted until the panel has actually opened it.
+      setPending((p) => (p && p !== s.active ? p : ''));
+      const native = cfg.native[s.active];
+      if (native) {
+        // e.g. the dashboard's "Manage subscription": open the app's screen, keep the panel where it was.
+        router.push(native);
+        const back = lastShellTab.current || s.tabs.find((t) => !cfg.own[t.label] && !cfg.native[t.label])?.label;
+        if (back) shellRef.current?.go(back);
+        return;
+      }
       const own = cfg.own[s.active];
       if (own) {
         // The panel itself opened the Map Editor / Intake (e.g. a dashboard
@@ -142,7 +162,7 @@ function Panel({ kind, PanelWebView }: { kind: PanelKind; PanelWebView: typeof P
       }
       if (s.active && !s.menu.includes(s.active)) lastShellTab.current = s.active;
     },
-    [cfg.own, open, openIntake],
+    [cfg.native, cfg.own, open, openIntake, router],
   );
 
   const signingOut = useRef(false);
@@ -158,6 +178,7 @@ function Panel({ kind, PanelWebView }: { kind: PanelKind; PanelWebView: typeof P
 
   const openMap = useCallback((pin?: string) => router.push(pin ? { pathname: '/live-map', params: { pin } } : '/live-map'), [router]);
   const openProject = useCallback((slug: string) => router.push({ pathname: '/project/[slug]', params: { slug } }), [router]);
+  const openAppRoute = useCallback((href: Href) => router.push(href), [router]);
 
   // ---- bottom bar --------------------------------------------------------
   const tabs: BarItem[] = useMemo(() => (shell?.tabs || []).map((t) => ({ label: t.label, badge: t.badge || undefined })), [shell]);
@@ -169,10 +190,30 @@ function Panel({ kind, PanelWebView }: { kind: PanelKind; PanelWebView: typeof P
 
   const press = (label: string) => {
     setMoreOpen(false);
+    const native = cfg.native[label];
+    if (native) {
+      router.push(native);
+      return;
+    }
     const own = cfg.own[label];
     if (own === 'intake') openIntake('');
     else if (own) open(own);
     else goShell(label);
+  };
+
+  // Back on the panel (Panel button or the back key): the panel opens first again.
+  useFocusEffect(
+    useCallback(() => {
+      siteMode.set(false);
+    }, []),
+  );
+
+  // The logo in the panel header opens the app's own Home page (live map, featured
+  // projects). The panel stays loaded underneath, so "Panel" on Home comes back instantly.
+  const goHome = () => {
+    setMoreOpen(false);
+    siteMode.set(true);
+    router.push('/');
   };
 
   // ---- Android back button -----------------------------------------------
@@ -210,18 +251,18 @@ function Panel({ kind, PanelWebView }: { kind: PanelKind; PanelWebView: typeof P
       <OfflineBanner />
       <View style={styles.body}>
         <View style={hidden('shell')}>
-          <PanelWebView ref={shellRef} path={cfg.shell} mode="shell" token={token} email={email} onShell={onShell} onSignedOut={onSignedOut} onOpenMap={openMap} onOpenIntake={cfg.intake ? openIntake : undefined} onOpenProject={openProject} />
+          <PanelWebView ref={shellRef} path={cfg.shell} mode="shell" token={token} email={email} onShell={onShell} onSignedOut={onSignedOut} onOpenMap={openMap} onOpenIntake={cfg.intake ? openIntake : undefined} onOpenProject={openProject} onHome={goHome} onAppRoute={openAppRoute} />
         </View>
         {loaded.includes('editor') ? (
           <View style={hidden('editor')}>
             <Header title="Map Editor" onReload={() => editorRef.current?.reload()} />
-            <PanelWebView ref={editorRef} path={cfg.editor} mode="frame" token={token} email={email} onSignedOut={onSignedOut} onOpenMap={openMap} onOpenIntake={cfg.intake ? openIntake : undefined} onOpenProject={openProject} />
+            <PanelWebView ref={editorRef} path={cfg.editor} mode="frame" token={token} email={email} onSignedOut={onSignedOut} onOpenMap={openMap} onOpenIntake={cfg.intake ? openIntake : undefined} onOpenProject={openProject} onHome={goHome} onAppRoute={openAppRoute} />
           </View>
         ) : null}
         {cfg.intake && loaded.includes('intake') ? (
           <View style={hidden('intake')}>
             <Header title="Projects Intake" onReload={() => intakeRef.current?.reload()} />
-            <PanelWebView ref={intakeRef} path={intakePath} mode="frame" token={token} email={email} onSignedOut={onSignedOut} onOpenMap={openMap} onOpenIntake={cfg.intake ? openIntake : undefined} onOpenProject={openProject} />
+            <PanelWebView ref={intakeRef} path={intakePath} mode="frame" token={token} email={email} onSignedOut={onSignedOut} onOpenMap={openMap} onOpenIntake={cfg.intake ? openIntake : undefined} onOpenProject={openProject} onHome={goHome} onAppRoute={openAppRoute} />
           </View>
         ) : null}
         {section === 'profile' ? (

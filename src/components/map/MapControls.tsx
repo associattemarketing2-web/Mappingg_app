@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useState } from 'react';
+import { useEffect, useRef, useState, type ComponentRef } from 'react';
 import { FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { openUrl } from '@/lib/openLink';
 import { callUrl, whatsappGeneralUrl } from '@/constants/contact';
@@ -15,6 +15,7 @@ export function SearchBar({
   onPick,
   onSubmit,
   onClear,
+  focusKey,
 }: {
   value: string;
   onChange(v: string): void;
@@ -22,12 +23,21 @@ export function SearchBar({
   onPick(s: Suggestion): void;
   onSubmit(): void;
   onClear(): void;
+  /** Focuses the field (opens the keyboard) whenever this changes to a new value. */
+  focusKey?: string;
 }) {
+  const input = useRef<ComponentRef<typeof TextInput>>(null);
+  useEffect(() => {
+    if (!focusKey) return;
+    const t = setTimeout(() => input.current?.focus(), 350);
+    return () => clearTimeout(t);
+  }, [focusKey]);
   return (
     <View>
       <View style={styles.search}>
         <Ionicons name="search" size={18} color={colors.muted} />
         <TextInput
+          ref={input}
           value={value}
           onChangeText={onChange}
           placeholder="Where do you want to buy? Try Mundhwa, Kharadi…"

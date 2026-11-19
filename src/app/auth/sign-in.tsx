@@ -2,6 +2,7 @@ import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { AppText } from '@/components/ui/AppText';
+import { AuthHeader } from '@/components/ui/AuthHeader';
 import { Button } from '@/components/ui/Button';
 import { Screen } from '@/components/ui/Screen';
 import { TextField } from '@/components/ui/TextField';
@@ -41,8 +42,7 @@ export default function SignInScreen() {
 
   return (
     <Screen>
-      <AppText variant="title">Welcome back</AppText>
-      <AppText style={styles.sub}>Sign in with the same email and password you use on mappingg.com.</AppText>
+      <AuthHeader title="Welcome back" subtitle="Sign in with the same email and password you use on mappingg.com." />
       {error ? (
         <View style={styles.error} accessibilityRole="alert">
           <Text style={styles.errorText}>{error}</Text>
@@ -72,12 +72,6 @@ export default function SignInScreen() {
       />
       <Button title="Sign in" onPress={() => void submit()} loading={busy} />
       <Button title="Forgot password?" variant="ghost" onPress={() => router.push('/auth/forgot-password')} style={styles.gap} />
-      <View style={styles.or}>
-        <View style={styles.orLine} />
-        <Text style={styles.orText}>or</Text>
-        <View style={styles.orLine} />
-      </View>
-      <Button title="Sign in with WhatsApp OTP" variant="whatsapp" icon="logo-whatsapp" onPress={() => router.replace('/auth/whatsapp')} />
       <View style={styles.divider} />
       <AppText style={styles.center}>New to Mappingg?</AppText>
       <Button title="Create an account" variant="secondary" onPress={() => router.replace('/auth/sign-up')} style={styles.gap} />
@@ -89,14 +83,10 @@ export default function SignInScreen() {
 }
 
 const styles = StyleSheet.create({
-  sub: { marginTop: 4, marginBottom: 18 },
   error: { backgroundColor: colors.dangerBg, padding: 12, borderRadius: radius.md, marginBottom: 14 },
   errorText: { color: colors.danger, fontFamily: fonts.medium, fontSize: 14 },
   gap: { marginTop: 8 },
   divider: { height: 1, backgroundColor: colors.line, marginVertical: 18 },
-  or: { flexDirection: 'row', alignItems: 'center', gap: 10, marginVertical: 12 },
-  orLine: { flex: 1, height: 1, backgroundColor: colors.line },
-  orText: { fontFamily: fonts.medium, fontSize: 13, color: colors.muted },
   center: { textAlign: 'center' },
   note: { marginTop: 18, textAlign: 'center' },
 });

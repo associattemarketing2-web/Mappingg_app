@@ -1,7 +1,7 @@
 import { useRouter } from 'expo-router';
 import { LoadingState } from '@/components/ui/States';
 import { useAuth } from '@/providers/AuthProvider';
-import { LiveMapScreen } from './(tabs)/index';
+import { LiveMapScreen } from './(tabs)/map';
 
 // The public live map opened from a panel ("Live map", "View on map" links),
 // with a back button. Accepts ?pin=<id> like the website's /map. Guests can

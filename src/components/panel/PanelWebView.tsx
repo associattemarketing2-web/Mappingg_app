@@ -1,4 +1,3 @@
-import { requireOptionalNativeModule } from 'expo';
 import { File, Paths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import * as WebBrowser from 'expo-web-browser';
@@ -11,19 +10,9 @@ import { colors } from '@/constants/theme';
 import { bootHtml, bridgeScript, goToPath, goToTab, type PanelMode } from '@/lib/panelBridge';
 import { useToast } from '@/providers/ToastProvider';
 import { ApiError } from '@/services/api/errors';
-
-// Older dev builds may not include the clipboard native module. Load it only
-// when it exists, otherwise fall back to the share sheet so the app doesn't crash.
-async function copyText(text: string): Promise<boolean> {
-  if (requireOptionalNativeModule('ExpoClipboard')) {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const Clipboard: typeof import('expo-clipboard') = require('expo-clipboard');
-    await Clipboard.setStringAsync(text);
-    return true;
-  }
-  await Share.share({ message: text }).catch(() => undefined);
-  return false;
-}
+import { copyText } from '@/lib/clipboard';
+import { appRouteForSitePath } from '@/services/subscriptions';
+import type { Href } from 'expo-router';
 
 // One of the website's panels (super-admin, developer panel, map editor,
 // projects intake) inside the app. The page is the website's own, so every
@@ -69,6 +58,10 @@ interface Props {
   onOpenIntake?(hash: string): void;
   /** A link to a public project page (/projects/<slug>). */
   onOpenProject?(slug: string): void;
+  /** The logo / a link to the website's home page was tapped: show the app's home. */
+  onHome?(): void;
+  /** A link to an account page the app has its own screen for (subscription, invoices, pricing…). */
+  onAppRoute?(href: Href): void;
 }
 
 // react-native-webview 14.0.1 types its class as Component<Props & undefined>,
@@ -93,12 +86,14 @@ function parse(url: string): URL | null {
 }
 
 export const PanelWebView = forwardRef<PanelWebViewHandle, Props>(function PanelWebView(props, ref) {
-  const { path, mode, token, email, onShell, onSignedOut, onOpenMap, onOpenIntake, onOpenProject } = props;
+  const { path, mode, token, email, onShell, onSignedOut, onOpenMap, onOpenIntake, onOpenProject, onHome, onAppRoute } = props;
   const toast = useToast();
   const web = useRef<WebViewRef>(null);
   const canGoBack = useRef(false);
   // Set once the panel itself has opened (after the sign-in step).
   const booted = useRef(false);
+  // The panel has reported its sections at least once since this page loaded.
+  const shellSeen = useRef(false);
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
   const [attempt, setAttempt] = useState(0);
@@ -110,8 +105,13 @@ export const PanelWebView = forwardRef<PanelWebViewHandle, Props>(function Panel
   );
   const injected = useMemo(() => bridgeScript(mode), [mode]);
 
+  // A section tapped while the panel is still signing in / loading: sent again
+  // once the panel reports in, so the tap is never lost.
+  const wanted = useRef('');
+
   useImperativeHandle(ref, () => ({
     go(tab) {
+      wanted.current = tab;
       web.current?.injectJavaScript(goToTab(tab));
     },
     navigate(to) {
@@ -133,6 +133,11 @@ export const PanelWebView = forwardRef<PanelWebViewHandle, Props>(function Panel
       const u = parse(url);
       if (!u) return;
       const ours = u.origin === parse(ORIGIN)?.origin;
+      // The website's home page (logo links): the app's own home instead of the browser.
+      if (ours && u.pathname === '/' && onHome) {
+        onHome();
+        return;
+      }
       if (ours && (u.pathname === '/map' || u.pathname === '/map/')) {
         onOpenMap(u.searchParams.get('pin') || undefined);
         return;
@@ -141,6 +146,12 @@ export const PanelWebView = forwardRef<PanelWebViewHandle, Props>(function Panel
       // view — the phone's browser has no Mappingg session.
       if (ours && onOpenIntake && /^\/intake\/?$/.test(u.pathname)) {
         onOpenIntake(u.hash);
+        return;
+      }
+      // Plans, checkout and invoices open the app's own screens (payments use the native checkout).
+      const appRoute = ours && onAppRoute ? appRouteForSitePath(u.pathname, u.search) : null;
+      if (appRoute) {
+        onAppRoute!(appRoute);
         return;
       }
       const project = ours ? /^\/projects\/([^/]+)\/?$/.exec(u.pathname) : null;
@@ -158,7 +169,7 @@ export const PanelWebView = forwardRef<PanelWebViewHandle, Props>(function Panel
       }
       void Linking.openURL(url).catch(() => toast('No app on this phone can open that link.'));
     },
-    [onOpenIntake, onOpenMap, onOpenProject, toast],
+    [onAppRoute, onHome, onOpenIntake, onOpenMap, onOpenProject, toast],
   );
 
   const saveDownload = useCallback(
@@ -189,7 +200,13 @@ export const PanelWebView = forwardRef<PanelWebViewHandle, Props>(function Panel
         return;
       }
       switch (msg.type) {
-        case 'shell':
+        case 'shell': {
+          const active = String(msg.active || '');
+          if (wanted.current) {
+            if (active === wanted.current) wanted.current = '';
+            else if (!shellSeen.current) web.current?.injectJavaScript(goToTab(wanted.current));
+          }
+          shellSeen.current = true;
           onShell?.({
             tabs: Array.isArray(msg.tabs) ? (msg.tabs as ShellTab[]) : [],
             menu: Array.isArray(msg.menu) ? (msg.menu as string[]) : [],
@@ -199,6 +216,7 @@ export const PanelWebView = forwardRef<PanelWebViewHandle, Props>(function Panel
             intake: String(msg.intake || ''),
           });
           break;
+        }
         case 'downloading':
           toast('Preparing the file…');
           break;
@@ -216,6 +234,9 @@ export const PanelWebView = forwardRef<PanelWebViewHandle, Props>(function Panel
         case 'share':
           void Share.share({ message: String(msg.text || ''), title: msg.title ? String(msg.title) : undefined }).catch(() => undefined);
           break;
+        case 'home':
+          onHome?.();
+          break;
         case 'boot':
           if (msg.ok === false) onSignedOut();
           break;
@@ -225,7 +246,7 @@ export const PanelWebView = forwardRef<PanelWebViewHandle, Props>(function Panel
           break;
       }
     },
-    [onShell, onSignedOut, openExternal, saveDownload, toast],
+    [onHome, onShell, onSignedOut, openExternal, saveDownload, toast],
   );
 
   const onShouldStart = useCallback(
@@ -239,6 +260,11 @@ export const PanelWebView = forwardRef<PanelWebViewHandle, Props>(function Panel
       if (ours) {
         // The boot page itself (baseUrl) and every panel page stay in the WebView.
         if (!booted.current && url === `${ORIGIN}/`) return true;
+        // …except account pages the app shows itself (subscription, invoices, pricing).
+        if (onAppRoute && appRouteForSitePath(u.pathname, u.search)) {
+          openExternal(url);
+          return false;
+        }
         if (PANEL_PATHS.test(u.pathname)) {
           booted.current = true;
           return true;
@@ -252,7 +278,7 @@ export const PanelWebView = forwardRef<PanelWebViewHandle, Props>(function Panel
       openExternal(url);
       return false;
     },
-    [onSignedOut, openExternal],
+    [onAppRoute, onSignedOut, openExternal],
   );
 
   if (failed) {
@@ -286,7 +312,14 @@ export const PanelWebView = forwardRef<PanelWebViewHandle, Props>(function Panel
         onNavigationStateChange={(s) => {
           canGoBack.current = s.canGoBack && !!parse(s.url) && PANEL_PATHS.test(parse(s.url)!.pathname);
         }}
+        onLoadStart={() => {
+          shellSeen.current = false;
+        }}
         onLoadEnd={() => setLoading(false)}
+        // Smoother scrolling / animations on Android, and the website's files are cached between visits.
+        androidLayerType="hardware"
+        cacheEnabled
+        cacheMode="LOAD_DEFAULT"
         onError={() => setFailed(true)}
         onRenderProcessGone={() => web.current?.reload()}
         onContentProcessDidTerminate={() => web.current?.reload()}

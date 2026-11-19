@@ -10,6 +10,7 @@ import { SelectField } from '@/components/ui/SelectField';
 import { EmptyState, ErrorState, LoadingState } from '@/components/ui/States';
 import { TextField } from '@/components/ui/TextField';
 import { colors, fonts, radius } from '@/constants/theme';
+import { usePlanGate } from '@/providers/PlanGateProvider';
 import { useToast } from '@/providers/ToastProvider';
 import { createMyProject, getMyProjects, updateMyProject, type DeveloperProjectInput, type DeveloperStatus } from '@/services/account';
 import { errorMessage } from '@/services/api/errors';
@@ -53,6 +54,7 @@ function toForm(p: DeveloperProject): typeof EMPTY {
 function ProjectForm({ id, initial }: { id?: string; initial: typeof EMPTY }) {
   const router = useRouter();
   const toast = useToast();
+  const planGate = usePlanGate();
   const qc = useQueryClient();
   const [form, setForm] = useState(initial);
   const [error, setError] = useState('');
@@ -105,6 +107,8 @@ function ProjectForm({ id, initial }: { id?: string; initial: typeof EMPTY }) {
       toast('Sent for review — it goes live once the Mappingg team approves it');
       router.back();
     } catch (e) {
+      // Over the plan's project limit, or editing a live project needs a paid plan (website: 402).
+      planGate.handle(e, form.title.trim() || 'Your project');
       setError(errorMessage(e));
     } finally {
       setBusy(false);

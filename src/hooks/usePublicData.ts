@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { useMemo } from 'react';
+import { getQuickView } from '@/services/account';
 import { fetchDeveloperDirectory, fetchMapData, fetchPins } from '@/services/publicData';
 import { projectNumberFromSlug, slugify } from '@/lib/slug';
 import type { Pin } from '@/types/models';
@@ -58,4 +59,19 @@ export function findPinBySlug(pins: Pin[] | undefined, slug: string): Pin | null
   const same = pins.filter((p) => p.number === n && p.isProject);
   if (!same.length) return pins.find((p) => p.number === n) || null;
   return same.find((p) => p.slug === slug) || same[0]!;
+}
+
+/**
+ * The project's full public details (website: the map's details panel after
+ * "Know more") — photos, project size, unit-type table, brochure, floor plans,
+ * payment plan, 360° tour. null when the server has no extra details.
+ */
+export function useQuickView(number: number | undefined) {
+  return useQuery({
+    queryKey: ['quickview', number],
+    queryFn: () => getQuickView(number!),
+    enabled: !!number && number > 0,
+    staleTime: 5 * 60_000,
+    retry: 1,
+  });
 }

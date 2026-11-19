@@ -11,7 +11,7 @@ import { colors, fonts, radius } from '@/constants/theme';
 // The sign-in popup: greets guests when the app opens, and appears again once
 // their free project views are used up. It can always be closed. Same as the
 // website's sign-in prompt (components/SignInPrompt.tsx): the "How to use
-// Mappingg" video on top, then Sign in, WhatsApp OTP and Create account.
+// Mappingg" video on top, then Sign in and Create account.
 
 export type PopupReason = 'welcome' | 'limit-pin' | 'limit-project' | 'feature';
 
@@ -69,7 +69,7 @@ export function SignUpPopup({ reason, remaining, onClose }: Props) {
 
   if (!shown) return null;
   const copy = COPY[shown];
-  const go = (path: '/auth/sign-up' | '/auth/sign-in' | '/auth/whatsapp') => {
+  const go = (path: '/auth/sign-up' | '/auth/sign-in') => {
     onClose();
     setTimeout(() => router.push(path), 200);
   };
@@ -114,25 +114,14 @@ export function SignUpPopup({ reason, remaining, onClose }: Props) {
             >
               <Text style={styles.primaryText}>Sign in</Text>
             </Pressable>
-            <View style={styles.or}>
-              <View style={styles.orLine} />
-              <Text style={styles.orText}>or</Text>
-              <View style={styles.orLine} />
-            </View>
             <Pressable
-              onPress={() => go('/auth/whatsapp')}
+              onPress={() => go('/auth/sign-up')}
               accessibilityRole="button"
-              style={({ pressed }) => [styles.wa, pressed && styles.pressed]}
+              style={({ pressed }) => [styles.secondary, pressed && styles.pressed]}
             >
-              <Ionicons name="logo-whatsapp" size={18} color="#fff" />
-              <Text style={styles.primaryText}>WhatsApp OTP</Text>
+              <Ionicons name="person-add" size={17} color={colors.forest} />
+              <Text style={styles.secondaryText}>Create free account</Text>
             </Pressable>
-            <Text style={styles.newText} maxFontSizeMultiplier={1.3}>
-              New to Mappingg?{' '}
-              <Text style={styles.newLink} onPress={() => go('/auth/sign-up')} accessibilityRole="link">
-                Create a free account
-              </Text>
-            </Text>
             <Pressable onPress={onClose} accessibilityRole="button" hitSlop={8} style={styles.later}>
               <Text style={styles.laterText}>
                 {shown === 'welcome' && remaining > 0 ? `Maybe later — explore ${remaining} projects free` : 'Maybe later'}
@@ -202,24 +191,23 @@ const styles = StyleSheet.create({
   mark: { width: 14, height: 14, borderRadius: 7, borderBottomRightRadius: 2, backgroundColor: colors.forest, transform: [{ rotate: '45deg' }] },
   brandText: { fontFamily: fonts.bold, fontSize: 14, color: colors.ink },
   brandEm: { fontFamily: fonts.regular, color: colors.muted },
-  title: { fontFamily: fonts.display, fontSize: 22, lineHeight: 28, color: colors.ink, textAlign: 'center' },
+  title: { fontFamily: fonts.extrabold, fontSize: 22, lineHeight: 28, letterSpacing: -0.5, color: colors.ink, textAlign: 'center' },
   text: { marginTop: 6, marginBottom: 14, fontFamily: fonts.regular, fontSize: 14, lineHeight: 20, color: colors.text, textAlign: 'center' },
   primary: { minHeight: 50, borderRadius: 14, backgroundColor: colors.forest, alignItems: 'center', justifyContent: 'center' },
   primaryText: { fontFamily: fonts.bold, fontSize: 16, color: '#fff' },
-  or: { flexDirection: 'row', alignItems: 'center', gap: 10, marginVertical: 10 },
-  orLine: { flex: 1, height: 1, backgroundColor: colors.line },
-  orText: { fontFamily: fonts.medium, fontSize: 13, color: colors.muted },
-  wa: {
+  secondary: {
+    marginTop: 10,
     minHeight: 48,
     borderRadius: 14,
-    backgroundColor: colors.whatsapp,
+    borderWidth: 1.5,
+    borderColor: colors.forest,
+    backgroundColor: '#fff',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
   },
-  newText: { marginTop: 14, fontFamily: fonts.regular, fontSize: 14, color: colors.text, textAlign: 'center' },
-  newLink: { fontFamily: fonts.semibold, color: colors.forest },
+  secondaryText: { fontFamily: fonts.bold, fontSize: 16, color: colors.forest },
   later: { alignSelf: 'center', paddingVertical: 10, marginTop: 2 },
   laterText: { fontFamily: fonts.medium, fontSize: 13, color: colors.muted },
   pressed: { opacity: 0.85 },
